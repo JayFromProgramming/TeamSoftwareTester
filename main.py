@@ -9,6 +9,9 @@ import aiohttp
 import asyncio
 import json
 
+from game_rooms import Chess
+from game_rooms.Chess import ChessViewer
+
 
 class Main:
 
@@ -30,6 +33,10 @@ class Main:
         self.user_hash = user_hash
         self.user_name = user_info
         self.rooms = {}
+
+        self.room_handlers = {
+            "Chess": ChessViewer
+        }
 
     async def create_user(self, username="testUser"):
         async with aiohttp.ClientSession() as session:
@@ -57,15 +64,28 @@ class Main:
                 else:
                     print(f"Failed to get rooms: {response.status}")
 
+    def build_name_list(self):
+        names = []
+        # Get the longest name so we can format the list nicely
+        if len(self.rooms) != 0:
+            longest_name = max([len(room) for room in self.rooms.keys()])
+        else:
+            longest_name = 0
+        for room in self.rooms.values():
+            name = room["name"].ljust(longest_name)
+            names.append(f"{name}({room['type']}) - {len(room['users'])}/{room['max_users']} users | "
+                         f"Password: {'Yes' if room['password_protected'] else 'No'} | Joinable: {'Yes' if room['joinable'] else 'No'}")
+        return names
+
     def main(self):
-        self.console.print(f"Welcome {self.user_name}!")
+
+        # Create a header that will be displayed at the top of the screen and persist
+
         self.console.print("Loading rooms...")
         time.sleep(1)
         asyncio.run(self.get_rooms())
         room_names = ["Create new room"]
-        for room_id, room in self.rooms.items():
-            room_names.append(f"{room['name']}({room['type']}) - {len(room['users'])}/{room['max_users']} users | "
-                              f"Password: {'Yes' if room['password_protected'] else 'No'} | Joinable: {'Yes' if room['joinable'] else 'No'}")
+        room_names.extend(self.build_name_list())
         room_names.append("Quit")
         title = "Please choose a room: "
         option, index = pick(room_names, title, indicator="=>")
@@ -99,6 +119,8 @@ class Main:
                                     cookies={"hash_id": self.user_hash}) as response:
                 if response.status == 200:
                     self.console.print(f"Room {room_name} created!")
+                    room = self.room_handlers[room_type](self.user_hash, "localhost", 47675)
+                    await room.main()
                 else:
                     self.console.print(f"Failed to create room {room_name}, status code: {response.status}")
 
@@ -124,6 +146,11 @@ class Main:
                     self.console.print(f"Joined room {room_name}!")
                 else:
                     self.console.print(f"Failed to join room {room_name}, status code: {response.status}")
+
+        # Get the room type and create an instance of it
+        room_type = self.rooms[room_name]["type"]
+        room = self.room_handlers[room_type](self.user_hash, "localhost", 47675)
+        await room.main()
 
 
 if __name__ == "__main__":
