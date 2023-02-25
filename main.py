@@ -62,7 +62,8 @@ class Main:
 
     async def get_rooms(self):
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"http://{self.host}:{self.port}/get_rooms", cookies={"user_hash": self.user_hash}) as response:
+            async with session.get(f"http://{self.host}:{self.port}/get_rooms",
+                                   cookies={"user_hash": self.user_hash}) as response:
                 if response.status == 200:
                     rooms = await response.json()
                     for room in rooms:
@@ -156,7 +157,7 @@ class Main:
 
         # Get the room type and create an instance of it
         room_type = self.rooms[room_name]["type"]
-        room = self.room_handlers[room_type](self.user_hash, "localhost", 47675)
+        room = self.room_handlers[room_type](self.user_hash, self.host, self.port)
         await room.main()
 
 
@@ -170,4 +171,4 @@ if __name__ == "__main__":
             exit(0)
         else:
             print("Invalid argument")
-    Main(host, port).main()
+    Main(host=host, port=port).main()
