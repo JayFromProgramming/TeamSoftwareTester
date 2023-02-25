@@ -76,12 +76,11 @@ class ChessViewer:
                                                        cookies={"user_hash": self.user_hash}) as resp:
                                     if resp.status == 200:
                                         json = await resp.json()
-                                        board_fen = json["board"]
+                                        board_epd = json["board"]
                                         current_color = self.bool_to_color(json["current_player"])
                                         self.player_color = self.bool_to_color(json["your_color"])
                                         # Update the board state
-                                        self.board = None
-                                        self.board = chess.Board(board_fen)
+                                        self.board.set_epd(board_epd)
                                         self.board.turn = current_color
                                         self.board_state = json["state"]
                                         self.last_move = json["last_move"]
@@ -122,26 +121,17 @@ class ChessViewer:
         else:
             return "Not playing"
 
-    def legal_move(self, move):
-        if move in self.board.legal_moves:
-            return 'move'
-        # Check if the move would be a castle
-        if self.board.is_castling(move):
-            return 'irreversible'
-        # Check if the move would be an en passant
-        if self.board.is_en_passant(move):
-            return 'irreversible'
-        # Check if the move would be a promotion
-        # Check if the piece is a pawn
-        if self.board.piece_at(move.from_square).piece_type == chess.PAWN:
-            # Check if the pawn is moving from the correct row
-            if self.board.piece_at(move.from_square).color == chess.WHITE:
-                if chess.square_rank(move.from_square) == 1:
-                    return 'promotion'
-            else:
-                if chess.square_rank(move.from_square) == 6:
-                    return 'promotion'
-        return False
+    def is_promotion(self, move: chess.Move):
+        """
+        Checks if a move is of a pawn promotion
+        :param move:
+        :return:
+        """
+        piece = self.board.piece_at(move.from_square)
+        if piece is not None:
+            if piece.piece_type == chess.PAWN:
+                if move.to_square in chess.SquareSet(chess.BB_RANK_8) or move.to_square in chess.SquareSet(chess.BB_RANK_1):
+                    return True
 
     def valid_cursor_selection(self):
         """
@@ -159,10 +149,8 @@ class ChessViewer:
         else:  # If a piece is already selected, check if the cursor is over a valid move
             move = chess.Move(chess.square(self.piece_origin[1], self.piece_origin[0]),
                               chess.square(self.cursor[1], self.cursor[0]))
-            if self.legal_move(move):
-                return move
-            else:
-                return False
+            if move in self.board.legal_moves:
+                return True
 
     def draw_ui(self):
         UI = Table(show_header=False, show_lines=True)
@@ -213,14 +201,8 @@ class ChessViewer:
                         row.append(self.piece_character(piece))
                 else:
                     if self.cursor[0] == i and self.cursor[1] == j:
-                        move = self.valid_cursor_selection()
-                        if move:
-                            if self.legal_move(move) == 'move':
-                                row.append(f"[green]*[/green]")
-                            elif self.legal_move(move) == 'irreversible':
-                                row.append(f"[yellow]![/yellow]")
-                            elif self.legal_move(move) == 'promotion':
-                                row.append(f"[yellow]^[/yellow]")
+                        if self.valid_cursor_selection():
+                            row.append(f"[green]*[/green]")
                         else:
                             row.append(f"*")
 
@@ -253,14 +235,14 @@ class ChessViewer:
                             # Check if the move is valid
                             move = chess.Move(chess.square(self.piece_origin[1], self.piece_origin[0]),
                                               chess.square(self.cursor[1], self.cursor[0]))
-                            if self.legal_move(move) == 'move' or self.legal_move(move) == 'irreversible':
+                            if move in self.board.legal_moves:
                                 # Move the piece
                                 self.board.push(move)
                                 self.move_queued = True
                                 self.queued_move = move
                                 self.piece_selected = False
                                 self.selected_piece = None
-                            elif self.legal_move(move) == 'promotion':
+                            elif self.is_promotion(move):
                                 move.promotion = chess.QUEEN
                                 self.board.push(move)
                                 self.move_queued = True
@@ -291,7 +273,7 @@ class ChessViewer:
         """
         loops = 0
         await self.get_board()
-        with Live(self.draw_ui(), refresh_per_second=10) as live:
+        with Live(self.draw_ui(), refresh_per_second=14) as live:
             while True:
                 live.update(self.draw_ui())
                 if loops % 10 == 0:
@@ -299,7 +281,8 @@ class ChessViewer:
                 loops += 1
                 # Read the keyboard input to move the cursor
                 await self.keyboard_thread()
-                time.sleep(0.1)
+                # Wait 1/14th of a second
+                await asyncio.sleep(1 / 14)
 
     async def main(self):
         """
