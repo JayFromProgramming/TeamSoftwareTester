@@ -32,8 +32,8 @@ fully_qualified_piece_names = {
 
 class ChessViewer:
 
-    def __init__(self, user_hash, server_url, server_port):
-
+    def __init__(self, user_hash, server_url, server_port, console: Console):
+        self.console = console
         self.user_hash = user_hash
         self.player_color = None
         self.board = chess.Board()
@@ -59,7 +59,7 @@ class ChessViewer:
         else:
             return None
 
-    async def get_board(self):
+    async def get_board(self, force=False):
         """
         Gets the board state from the server
         :return:
@@ -70,7 +70,7 @@ class ChessViewer:
                                        cookies={"user_hash": self.user_hash}) as resp:
                     if resp.status == 200:
                         json = await resp.json()
-                        if json["changed"]:
+                        if json["changed"] or force:
                             async with aiohttp.ClientSession() as session:
                                 async with session.get(f"http://{self.server_url}:{self.server_port}/room/get_state",
                                                        cookies={"user_hash": self.user_hash}) as resp:
@@ -79,7 +79,6 @@ class ChessViewer:
                                         board_fen = json["board"]
                                         current_color = self.bool_to_color(json["current_player"])
                                         self.player_color = self.bool_to_color(json["your_color"])
-
                                         # Update the board state
                                         self.board = None
                                         self.board = chess.Board(board_fen)
@@ -87,6 +86,8 @@ class ChessViewer:
                                         self.board_state = json["state"]
                                         self.last_move = json["last_move"]
                                         # self.taken_pieces = json["taken_pieces"]
+                                        # Play the console bell sound when the board changes
+                                        self.console.bell()
                                     else:
                                         logging.error(f"Error getting board state: {resp.status}")
                     else:
@@ -121,6 +122,27 @@ class ChessViewer:
         else:
             return "Not playing"
 
+    def legal_move(self, move):
+        if move in self.board.legal_moves:
+            return 'move'
+        # Check if the move would be a castle
+        if self.board.is_castling(move):
+            return 'irreversible'
+        # Check if the move would be an en passant
+        if self.board.is_en_passant(move):
+            return 'irreversible'
+        # Check if the move would be a promotion
+        # Check if the piece is a pawn
+        if self.board.piece_at(move.from_square).piece_type == chess.PAWN:
+            # Check if the pawn is moving from the correct row
+            if self.board.piece_at(move.from_square).color == chess.WHITE:
+                if chess.square_rank(move.from_square) == 1:
+                    return 'promotion'
+            else:
+                if chess.square_rank(move.from_square) == 6:
+                    return 'promotion'
+        return False
+
     def valid_cursor_selection(self):
         """
         Checks if the cursor is over a valid piece
@@ -137,9 +159,10 @@ class ChessViewer:
         else:  # If a piece is already selected, check if the cursor is over a valid move
             move = chess.Move(chess.square(self.piece_origin[1], self.piece_origin[0]),
                               chess.square(self.cursor[1], self.cursor[0]))
-            if move in self.board.legal_moves:
-                return True
-            return False
+            if self.legal_move(move):
+                return move
+            else:
+                return False
 
     def draw_ui(self):
         UI = Table(show_header=False, show_lines=True)
@@ -161,6 +184,12 @@ class ChessViewer:
 
         return UI
 
+    def piece_character(self, piece):
+        if piece.color == chess.WHITE:
+            return f"[underline white]{piece.unicode_symbol()}[/underline white]"
+        else:
+            return piece.unicode_symbol()
+
     def draw_board(self):
         """
         Draws the board to the console
@@ -177,18 +206,24 @@ class ChessViewer:
                     piece = self.board.piece_at(chess.square(j, i))
                     if self.cursor[0] == i and self.cursor[1] == j:
                         if self.valid_cursor_selection():
-                            row.append(f"[on grey19]{piece.unicode_symbol()}[/on grey19]")
+                            row.append(f"[on grey19]{self.piece_character(piece)}[/on grey19]")
                         else:
-                            row.append(f"[on red]{piece.unicode_symbol()}[/on red]")
+                            row.append(f"[on red]{self.piece_character(piece)}[/on red]")
                     else:
-                        # Bold the piece
-                        row.append(f"[bold]{piece.unicode_symbol()}[/bold]")
+                        row.append(self.piece_character(piece))
                 else:
                     if self.cursor[0] == i and self.cursor[1] == j:
-                        if self.valid_cursor_selection():
-                            row.append(f"[green]*[/green]")
+                        move = self.valid_cursor_selection()
+                        if move:
+                            if self.legal_move(move) == 'move':
+                                row.append(f"[green]*[/green]")
+                            elif self.legal_move(move) == 'irreversible':
+                                row.append(f"[yellow]![/yellow]")
+                            elif self.legal_move(move) == 'promotion':
+                                row.append(f"[yellow]^[/yellow]")
                         else:
                             row.append(f"*")
+
                     else:
                         row.append(" ")
             board_table.add_row(*row)
@@ -207,26 +242,39 @@ class ChessViewer:
                     self.cursor[1] -= 1 if self.cursor[1] > 0 else 0
                 case b'M':
                     self.cursor[1] += 1 if self.cursor[1] < 7 else 0
+                case b'r':
+                    await self.get_board(force=True)
                 case b' ':
-                    if self.piece_selected:
-                        # Check if the move is valid
-                        move = chess.Move(chess.square(self.piece_origin[1], self.piece_origin[0]),
-                                          chess.square(self.cursor[1], self.cursor[0]))
-                        if move in self.board.legal_moves:
-                            # Move the piece
-                            self.board.push(move)
-                            self.move_queued = True
-                            self.queued_move = move
-                            self.piece_selected = False
-                            self.selected_piece = None
-                        else:
-                            print(f"Invalid move: {move}")
-                            self.piece_selected = False
-                            self.selected_piece = None
+                    if self.move_queued:
+                        self.move_queued = False
+                        self.queued_move = None
                     else:
-                        self.piece_selected = True
-                        self.selected_piece = self.board.piece_at(chess.square(self.cursor[1], self.cursor[0]))
-                        self.piece_origin = self.cursor.copy()
+                        if self.piece_selected:
+                            # Check if the move is valid
+                            move = chess.Move(chess.square(self.piece_origin[1], self.piece_origin[0]),
+                                              chess.square(self.cursor[1], self.cursor[0]))
+                            if self.legal_move(move) == 'move' or self.legal_move(move) == 'irreversible':
+                                # Move the piece
+                                self.board.push(move)
+                                self.move_queued = True
+                                self.queued_move = move
+                                self.piece_selected = False
+                                self.selected_piece = None
+                            elif self.legal_move(move) == 'promotion':
+                                move.promotion = chess.QUEEN
+                                self.board.push(move)
+                                self.move_queued = True
+                                self.queued_move = move
+                                self.piece_selected = False
+                                self.selected_piece = None
+                            else:
+                                print(f"Invalid move: {move}")
+                                self.piece_selected = False
+                                self.selected_piece = None
+                        else:
+                            self.piece_selected = True
+                            self.selected_piece = self.board.piece_at(chess.square(self.cursor[1], self.cursor[0]))
+                            self.piece_origin = self.cursor.copy()
                 case b'\r':
                     if self.move_queued:
                         # Remember to flip the move back to the server's perspective if the player is white

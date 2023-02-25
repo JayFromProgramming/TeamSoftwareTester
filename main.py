@@ -126,7 +126,7 @@ class Main:
                                     cookies={"hash_id": self.user_hash}) as response:
                 if response.status == 200:
                     self.console.print(f"Room {room_name} created!")
-                    room = self.room_handlers[room_type](self.user_hash, self.host, self.port)
+                    room = self.room_handlers[room_type](self.user_hash, self.host, self.port, self.console)
                     await room.main()
                 else:
                     self.console.print(f"Failed to create room {room_name}, status code: {response.status}")
@@ -157,7 +157,7 @@ class Main:
 
         # Get the room type and create an instance of it
         room_type = self.rooms[room_name]["type"]
-        room = self.room_handlers[room_type](self.user_hash, self.host, self.port)
+        room = self.room_handlers[room_type](self.user_hash, self.host, self.port, self.console)
         await room.main()
 
 
