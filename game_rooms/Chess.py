@@ -29,6 +29,7 @@ fully_qualified_piece_names = {
     None: "Empty"
 }
 
+
 class ChessViewer:
 
     def __init__(self, user_hash, server_url, server_port):
@@ -39,6 +40,7 @@ class ChessViewer:
         self.move_queued = False
         self.queued_move = None
         self.cursor = [0, 0]
+        self.board_relative_cursor = [0, 0]
         self.piece_selected = False
         self.piece_origin = [0, 0]
         self.selected_piece = None  # type: chess.Piece or None
@@ -46,6 +48,16 @@ class ChessViewer:
         self.board_state = "Waiting for server..."
         self.server_url = server_url
         self.server_port = server_port
+        self.last_move = None
+        self.taken_pieces = {"white": [], "black": []}
+
+    def bool_to_color(self, value):
+        if value is True:
+            return chess.WHITE
+        elif value is False:
+            return chess.BLACK
+        else:
+            return None
 
     async def get_board(self):
         """
@@ -65,14 +77,16 @@ class ChessViewer:
                                     if resp.status == 200:
                                         json = await resp.json()
                                         board_fen = json["board"]
-                                        current_color = chess.WHITE if json["current_player"] == "white" else chess.BLACK
-                                        self.player_color = chess.WHITE if json["your_color"] == "white" else chess.BLACK
+                                        current_color = self.bool_to_color(json["current_player"])
+                                        self.player_color = self.bool_to_color(json["your_color"])
 
                                         # Update the board state
                                         self.board = None
                                         self.board = chess.Board(board_fen)
                                         self.board.turn = current_color
                                         self.board_state = json["state"]
+                                        self.last_move = json["last_move"]
+                                        # self.taken_pieces = json["taken_pieces"]
                                     else:
                                         logging.error(f"Error getting board state: {resp.status}")
                     else:
@@ -100,37 +114,41 @@ class ChessViewer:
             logging.error(f"Error sending move: {e}")
 
     def color_to_str(self, color):
-        return "White" if color == chess.WHITE else "Black"
+        if color == chess.WHITE:
+            return "White"
+        elif color == chess.BLACK:
+            return "Black"
+        else:
+            return "Not playing"
 
-    def draw_board(self):
+    def valid_cursor_selection(self):
         """
-        Draws the board to the console
+        Checks if the cursor is over a valid piece
         :return:
         """
-        UI = Table(show_header=False, show_lines=True)
-        board_table = Table(show_header=False, show_lines=True)
-        # Set the background color of the table to brown
+        if self.board.turn != self.player_color:
+            return False
+        piece = self.board.piece_at(chess.square(self.cursor[1], self.cursor[0]))
+        if not self.piece_selected:
+            if piece is not None:
+                if piece.color == self.board.turn:
+                    return True
+            return False
+        else:  # If a piece is already selected, check if the cursor is over a valid move
+            move = chess.Move(chess.square(self.piece_origin[1], self.piece_origin[0]),
+                              chess.square(self.cursor[1], self.cursor[0]))
+            if move in self.board.legal_moves:
+                return True
+            return False
 
+    def draw_ui(self):
+        UI = Table(show_header=False, show_lines=True)
+        UI.add_column("Chess", justify="left")
+        UI.add_column("Info", justify="center")
         UI.add_row(f"It's [bold]{self.color_to_str(self.board.turn)}[/bold]'s"
                    f" turn, you are [bold]{self.color_to_str(self.player_color)}[/bold].")
-        for i in range(8):
-            row = []
-            for j in range(8):
-                if self.board.piece_at(chess.square(j, i)) is not None:
-                    piece = self.board.piece_at(chess.square(j, i))
-                    if self.cursor[0] == i and self.cursor[1] == j:
-                        row.append(f"[on red]{piece.unicode_symbol()}[/on red]")
-                    else:
-                        # Bold the piece
-                        row.append(f"[bold]{piece.unicode_symbol()}[/bold]")
-                else:
-                    if self.cursor[0] == i and self.cursor[1] == j:
-                        row.append(f"[on red] [/on red]")
-                    else:
-                        row.append(" ")
-            board_table.add_row(*row)
 
-        UI.add_row(board_table)
+        UI.add_row(self.draw_board())
         UI.add_row(f"Board state: {self.board_state}")
         if self.move_queued:
             UI.add_row(f"Move queued: {self.queued_move} | Press Enter to confirm or space to cancel")
@@ -142,6 +160,39 @@ class ChessViewer:
                        f"Cursor Over: {over}")
 
         return UI
+
+    def draw_board(self):
+        """
+        Draws the board to the console
+        :return:
+        """
+
+        board_table = Table(show_header=False, show_lines=True, border_style="orange4")
+        # Set the background color of the table to brown
+
+        for i in range(8):
+            row = []
+            for j in range(8):
+                if self.board.piece_at(chess.square(j, i)) is not None:
+                    piece = self.board.piece_at(chess.square(j, i))
+                    if self.cursor[0] == i and self.cursor[1] == j:
+                        if self.valid_cursor_selection():
+                            row.append(f"[on grey19]{piece.unicode_symbol()}[/on grey19]")
+                        else:
+                            row.append(f"[on red]{piece.unicode_symbol()}[/on red]")
+                    else:
+                        # Bold the piece
+                        row.append(f"[bold]{piece.unicode_symbol()}[/bold]")
+                else:
+                    if self.cursor[0] == i and self.cursor[1] == j:
+                        if self.valid_cursor_selection():
+                            row.append(f"[green]*[/green]")
+                        else:
+                            row.append(f"*")
+                    else:
+                        row.append(" ")
+            board_table.add_row(*row)
+        return board_table
 
     async def keyboard_thread(self):
         if msvcrt.kbhit():
@@ -178,6 +229,7 @@ class ChessViewer:
                         self.piece_origin = self.cursor.copy()
                 case b'\r':
                     if self.move_queued:
+                        # Remember to flip the move back to the server's perspective if the player is white
                         await self.send_move(self.queued_move)
                         self.move_queued = False
                         self.queued_move = None
@@ -190,9 +242,10 @@ class ChessViewer:
         :return:
         """
         loops = 0
-        with Live(self.draw_board(), refresh_per_second=10) as live:
+        await self.get_board()
+        with Live(self.draw_ui(), refresh_per_second=10) as live:
             while True:
-                live.update(self.draw_board())
+                live.update(self.draw_ui())
                 if loops % 10 == 0:
                     await self.get_board()
                 loops += 1
@@ -206,4 +259,3 @@ class ChessViewer:
         :return:
         """
         await self.update()
-

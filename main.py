@@ -16,8 +16,10 @@ from game_rooms.Chess import ChessViewer
 
 class Main:
 
-    def __init__(self, anonymous=False):
+    def __init__(self, host="localhost", port=47675, anonymous=False):
         self.console = Console()
+        self.host = host
+        self.port = port
         # Look for user.txt in the same directory as this file.
         # If it doesn't exist, connect to the server and create a new user.
 
@@ -43,7 +45,7 @@ class Main:
 
     async def create_user(self, username="testUser", anonymous=False):
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"http://localhost:47675/create_user/{username}") as response:
+            async with session.get(f"http://{self.host}:{self.port}/create_user/{username}") as response:
                 reply = await response.json()
                 print(reply)
                 cookie = reply["user_id"]
@@ -55,12 +57,12 @@ class Main:
 
     async def get_user(self, user_hash):
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"http://localhost:47675/login/{user_hash}") as response:
+            async with session.get(f"http://{self.host}:{self.port}/login/{user_hash}") as response:
                 return await response.json()
 
     async def get_rooms(self):
         async with aiohttp.ClientSession() as session:
-            async with session.get("http://localhost:47675/get_rooms", cookies={"user_hash": self.user_hash}) as response:
+            async with session.get(f"http://{self.host}:{self.port}/get_rooms", cookies={"user_hash": self.user_hash}) as response:
                 if response.status == 200:
                     rooms = await response.json()
                     for room in rooms:
@@ -118,7 +120,7 @@ class Main:
         room_type = pick(valid_rooms, "Please choose a room type:", indicator="=>")[0]
 
         async with aiohttp.ClientSession() as session:
-            async with session.post("http://localhost:47675/create_room",
+            async with session.post(f"http://{self.host}:{self.port}/create_room",
                                     json={"room_name": room_name, "room_type": room_type, "password": password},
                                     cookies={"hash_id": self.user_hash}) as response:
                 if response.status == 200:
@@ -130,7 +132,8 @@ class Main:
 
     async def get_valid_rooms(self):
         async with aiohttp.ClientSession() as session:
-            async with session.get("http://localhost:47675/get_games", cookies={"hash_id": self.user_hash}) as response:
+            async with session.get(f"http://{self.host}:{self.port}/get_games",
+                                   cookies={"hash_id": self.user_hash}) as response:
                 if response.status == 200:
                     return await response.json()
                 else:
@@ -143,7 +146,7 @@ class Main:
         else:
             password = None
         async with aiohttp.ClientSession() as session:
-            async with session.post("http://localhost:47675/join_room",
+            async with session.post(f"http://{self.host}:{self.port}/join_room",
                                     json={"room_id": self.rooms[room_name]["room_id"], "password": password},
                                     cookies={"hash_id": self.user_hash}) as response:
                 if response.status == 200:
@@ -159,9 +162,12 @@ class Main:
 
 if __name__ == "__main__":
     # Check if this client should be ananonymous via a command line argument
+    host = "wopr.eggs.loafclan.org"
+    port = 47675
     if len(sys.argv) > 1:
         if sys.argv[1] == "--anonymous":
-            Main(anonymous=True).main()
+            Main(host, port, anonymous=True).main()
+            exit(0)
         else:
             print("Invalid argument")
-    Main().main()
+    Main(host, port).main()
