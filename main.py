@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 
 from rich.console import Console
@@ -15,38 +16,41 @@ from game_rooms.Chess import ChessViewer
 
 class Main:
 
-    def __init__(self):
+    def __init__(self, anonymous=False):
         self.console = Console()
         # Look for user.txt in the same directory as this file.
         # If it doesn't exist, connect to the server and create a new user.
 
-        if not os.path.exists("user.txt"):
+        if not os.path.exists("user.txt") or anonymous:
+            print("Creating new user")
             username = self.console.input("Please enter a username: ")
-            user_hash = asyncio.run(self.create_user(username))
-            user_info = asyncio.run(self.get_user(user_hash))["username"]
+            user_hash = asyncio.run(self.create_user(username, anonymous))
+            user_name = asyncio.run(self.get_user(user_hash))["username"]
         else:
             print("Loading user")
             with open("user.txt", "r") as f:
                 user_hash = f.read()
-            user_info = asyncio.run(self.get_user(user_hash))["username"]
+            user_name = asyncio.run(self.get_user(user_hash))["username"]
 
         self.user_hash = user_hash
-        self.user_name = user_info
+        self.user_name = user_name
+        print(f"Logged in as {user_name}")
         self.rooms = {}
 
         self.room_handlers = {
             "Chess": ChessViewer
         }
 
-    async def create_user(self, username="testUser"):
+    async def create_user(self, username="testUser", anonymous=False):
         async with aiohttp.ClientSession() as session:
             async with session.get(f"http://localhost:47675/create_user/{username}") as response:
                 reply = await response.json()
                 print(reply)
                 cookie = reply["user_id"]
                 print(cookie)
-                with open("user.txt", "w") as f:
-                    f.write(cookie)
+                if not anonymous:
+                    with open("user.txt", "w") as f:
+                        f.write(cookie)
                 return cookie
 
     async def get_user(self, user_hash):
@@ -154,4 +158,10 @@ class Main:
 
 
 if __name__ == "__main__":
+    # Check if this client should be ananonymous via a command line argument
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--anonymous":
+            Main(anonymous=True).main()
+        else:
+            print("Invalid argument")
     Main().main()

@@ -13,6 +13,21 @@ from rich.live import Live
 
 from aiohttp import web
 
+fully_qualified_piece_names = {
+    "P": "White Pawn",
+    "N": "White Knight",
+    "B": "White Bishop",
+    "R": "White Rook",
+    "Q": "White Queen",
+    "K": "White King",
+    "p": "Black Pawn",
+    "n": "Black Knight",
+    "b": "Black Bishop",
+    "r": "Black Rook",
+    "q": "Black Queen",
+    "k": "Black King",
+    None: "Empty"
+}
 
 class ChessViewer:
 
@@ -28,6 +43,7 @@ class ChessViewer:
         self.piece_origin = [0, 0]
         self.selected_piece = None  # type: chess.Piece or None
         self.player = 1
+        self.board_state = "Waiting for server..."
         self.server_url = server_url
         self.server_port = server_port
 
@@ -49,8 +65,14 @@ class ChessViewer:
                                     if resp.status == 200:
                                         json = await resp.json()
                                         board_fen = json["board"]
+                                        current_color = chess.WHITE if json["current_player"] == "white" else chess.BLACK
+                                        self.player_color = chess.WHITE if json["your_color"] == "white" else chess.BLACK
+
                                         # Update the board state
-                                        self.board = chess.Board(fen=board_fen)
+                                        self.board = None
+                                        self.board = chess.Board(board_fen)
+                                        self.board.turn = current_color
+                                        self.board_state = json["state"]
                                     else:
                                         logging.error(f"Error getting board state: {resp.status}")
                     else:
@@ -67,14 +89,18 @@ class ChessViewer:
         """
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"http://{self.server_url}:{self.server_port}/room/move/{move}",
-                                       cookies={"user_hash": self.user_hash}) as resp:
-                    if resp.status == 200:
-                        pass
-                    else:
+                async with session.post(f"http://{self.server_url}:{self.server_port}/room/make_move",
+                                        cookies={"user_hash": self.user_hash},
+                                        json={"move": move.uci()}) as resp:
+                    if resp.status != 200:
                         logging.error(f"Error sending move: {resp.status}")
+                        # Reset the board state
+                        self.board.move_stack.pop()
         except Exception as e:
             logging.error(f"Error sending move: {e}")
+
+    def color_to_str(self, color):
+        return "White" if color == chess.WHITE else "Black"
 
     def draw_board(self):
         """
@@ -84,6 +110,9 @@ class ChessViewer:
         UI = Table(show_header=False, show_lines=True)
         board_table = Table(show_header=False, show_lines=True)
         # Set the background color of the table to brown
+
+        UI.add_row(f"It's [bold]{self.color_to_str(self.board.turn)}[/bold]'s"
+                   f" turn, you are [bold]{self.color_to_str(self.player_color)}[/bold].")
         for i in range(8):
             row = []
             for j in range(8):
@@ -102,12 +131,15 @@ class ChessViewer:
             board_table.add_row(*row)
 
         UI.add_row(board_table)
-        UI.add_row("WASD to move cursor, space to select piece, q to quit")
+        UI.add_row(f"Board state: {self.board_state}")
         if self.move_queued:
             UI.add_row(f"Move queued: {self.queued_move} | Press Enter to confirm or space to cancel")
         else:
+            over = self.board.piece_at(chess.square(self.cursor[1], self.cursor[0]))
+            over = fully_qualified_piece_names[over.symbol()] if over is not None else "Empty"
             UI.add_row(f"Selected piece: {self.selected_piece}"
-                       if self.piece_selected else f"Cursor Over: {self.board.piece_at(chess.square(self.cursor[1], self.cursor[0]))}")
+                       if self.piece_selected else
+                       f"Cursor Over: {over}")
 
         return UI
 
