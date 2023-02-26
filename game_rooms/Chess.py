@@ -1,6 +1,7 @@
 import msvcrt
 import threading
 import time
+import traceback
 
 import aiohttp
 import asyncio
@@ -50,6 +51,8 @@ class ChessViewer:
         self.server_port = server_port
         self.last_move = None
         self.taken_pieces = {"white": [], "black": []}
+        self.players = {}
+        self.spectators = {}
 
     def bool_to_color(self, value):
         if value is True:
@@ -70,6 +73,11 @@ class ChessViewer:
                                        cookies={"user_hash": self.user_hash}) as resp:
                     if resp.status == 200:
                         json = await resp.json()
+                        if json is None:
+                            raise Exception("Server returned null")
+                        if "frequent_update" in json:
+                            self.players = json["frequent_update"]["players"]
+                            self.spectators = json["frequent_update"]["spectators"]
                         if json["changed"] or force:
                             async with aiohttp.ClientSession() as session:
                                 async with session.get(f"http://{self.server_url}:{self.server_port}/room/get_state",
@@ -88,12 +96,13 @@ class ChessViewer:
                                         # Play the console bell sound when the board changes
                                         self.console.bell()
                                     else:
-                                        logging.error(f"Error getting board state: {resp.status}")
+                                        logging.error(f"Error getting board state: {resp.status}: {await resp.text()}")
                     else:
-                        logging.error(f"Error getting board state: {resp.status}")
+                        logging.error(f"Error getting board state: {resp.status}: {await resp.text()}")
+
 
         except Exception as e:
-            logging.error(f"Error getting board state: {e}")
+            logging.error(f"Error getting board state: {e} {traceback.format_exc()}")
 
     async def send_move(self, move: chess.Move):
         """
@@ -159,8 +168,8 @@ class ChessViewer:
         UI.add_row(f"It's [bold]{self.color_to_str(self.board.turn)}[/bold]'s"
                    f" turn, you are [bold]{self.color_to_str(self.player_color)}[/bold].")
 
-        UI.add_row(self.draw_board())
-        UI.add_row(f"Board state: {self.board_state}")
+        UI.add_row(self.draw_board(), self.draw_player_table())
+        UI.add_row(f"Board state: {self.board_state}", f"Last move: {self.last_move}")
         if self.move_queued:
             UI.add_row(f"Move queued: {self.queued_move} | Press Enter to confirm or space to cancel")
         else:
@@ -177,6 +186,17 @@ class ChessViewer:
             return f"[underline white]{piece.unicode_symbol()}[/underline white]"
         else:
             return piece.unicode_symbol()
+
+    def draw_player_table(self):
+        player_table = Table(show_header=True, show_lines=True)
+        player_table.add_column("Players", justify="left")
+        player_table.add_column("Status", justify="center")
+        for player in self.players:
+            player_table.add_row(f"{player['username']}", f"{'[green]Online[/green]' if player['online'] else '[red]Offline[/red]'}")
+        player_table.add_row(f"[bold]Spectators[/bold]", f"")
+        for spectator in self.spectators:
+            player_table.add_row(f"{spectator['username']}", f"{'[green]Online[/green]' if spectator['online'] else '[red]Offline[/red]'}")
+        return player_table
 
     def draw_board(self):
         """
