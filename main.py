@@ -114,8 +114,8 @@ class Main:
 
 if __name__ == "__main__":
     # Check if this client should be ananonymous via a command line argument
-    host = "wopr.eggs.loafclan.org"
-    # host = "localhost"
+    # host = "wopr.eggs.loafclan.org"
+    host = "localhost"
     port = 47675
     if len(sys.argv) > 1:
         if sys.argv[1] == "--anonymous":

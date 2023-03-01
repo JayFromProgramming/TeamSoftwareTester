@@ -38,11 +38,14 @@ class ChessViewer:
 
     # Arguments that the server needs when creating a new game
     creation_args = {
-        "timers_enabled": {"name": "Timers Enabled", "type": "bool", "default": True, "depends_on": None},
-        "time_added_per_move": {"name": "Time Added Per Move", "type": "int", "default": 10, "depends_on": "timers_enabled"},
-        "white_time": {"name": "White Time", "type": "int", "default": 300, "depends_on": "timers_enabled"},
-        "black_time": {"name": "Black Time", "type": "int", "default": 300, "depends_on": "timers_enabled"},
-
+        "timers_enabled": {"name": "Timers Enabled", "type": "bool", "default": True, "cords": [0, 0]},
+        "time_added_per_move": {"name": "Time Added Per Move", "type": "time", "default": 10, "cords": [0, 1]},
+        "white_time": {"name": "White Time", "type": "time", "default": 300, "cords": [0, 2]},
+        "black_time": {"name": "Black Time", "type": "time", "default": 300, "cords": [0, 3]},
+        "chess_variant": {"name": "Chess Variant", "type": "list", "default": "Standard", "cords": [1, 0],
+                          "options": ["Standard", "Chess960", "Crazyhouse", "King of the Hill", "Three Check"]},
+        "starting_fen": {"name": "Starting FEN", "type": "text", "default": "", "cords": [1, 1]},
+        "allow_spectators": {"name": "Allow Spectators", "type": "bool", "default": True, "cords": [1, 2]},
     }
 
     def __init__(self, user_hash, server_url, server_port, console: Console):

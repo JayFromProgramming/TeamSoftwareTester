@@ -6,7 +6,11 @@ import json
 import asyncio
 
 from rich.console import Console
+from rich.layout import Layout
+from rich.panel import Panel
+from rich.table import Column
 
+from RoomOptionHandler import RoomOptionHandler
 from game_rooms.Chess import ChessViewer
 
 
@@ -90,6 +94,7 @@ class ServerInterface:
                                    cookies={"user_hash": self.user_hash}) as response:
                 if response.status == 200:
                     rooms = await response.json()
+                    rooms = rooms["rooms"]
                     for room in rooms:
                         self.rooms[room["name"]] = room
                 else:
@@ -154,21 +159,16 @@ class ServerInterface:
 
         room_name = self.console.input("Please enter a room name: ")
         # Ask if the room should be password protected
-        password_protected = pick(["No", "Yes"], "Should the room be password protected?", indicator="=>")[0]
-        if password_protected == "Yes":
-            password = self.console.input("Please enter a password: ")
-        else:
-            password = None
         # Ask what type of room it is
         room_type = pick(valid_rooms, "Please choose a room type:", indicator="=>")[0]
 
-        # settings = self.room_settings_ui_generator(self.room_handlers[room_type])
-        settings = {}
+        settings = RoomOptionHandler(self.console, self.room_handlers[room_type].creation_args)
+        settings = settings.query()
 
         async with aiohttp.ClientSession() as session:
             async with session.post(f"http://{self.host}:{self.port}/create_room",
-                                    json={"room_name": room_name, "room_type": room_type, "password": password,
-                                        "room_settings": settings},
+                                    json={"room_name": room_name, "room_type": room_type,
+                                          "room_settings": settings},
                                     cookies={"hash_id": self.user_hash}) as response:
                 if response.status == 200:
                     self.console.print(f"Room {room_name} created!")
@@ -176,11 +176,3 @@ class ServerInterface:
                     await room.main()
                 else:
                     self.console.print(f"Failed to create room {room_name}, status code: {response.status}")
-
-    # def room_settings_ui_generator(self, room_type):
-    #     settings = {}
-    #     with self.console.screen():
-    #
-    #         # Create a terminal UI for setting the room settings
-    #         for setting in room_type.creation_args:
-    #             match setting["type"]:
