@@ -33,14 +33,18 @@ class Main:
                 self.console.print(f"{info['name']}@{info['host']}:{info['port']}".ljust(45) + " - [red]OFFLINE[/red]")
                 self.servers[server]["online"] = False
             else:
-                self.console.print(f"{info['name']}@{info['host']}:{info['port']}".ljust(45) + f" - [green]ONLINE - {online:.2f}ms[/green]")
-                self.servers[server]["online"] = True
+                self.console.print(f"{info['name']}@{info['host']}:{info['port']}".ljust(45) + f" - [green]ONLINE {online:.2f}ms[/green]")
+                self.servers[server]["online"] = online
 
         time.sleep(1)
 
         title = "Please choose a server: "
-        options = [f"{info['name']} @ {info['host']}:{info['port']} - {'Online' if info['online'] else 'Offline'}"
-                   for server, info in self.servers.items()]
+        options = []
+        for server, info in self.servers.items():
+            if info["online"]:
+                options.append(f"{info['name']}@{info['host']}:{info['port']}".ljust(45) + f" - ONLINE {info['online']:.2f}ms")
+            else:
+                options.append(f"{info['name']}@{info['host']}:{info['port']}".ljust(45) + " - OFFLINE")
         options.append("Add New Server")
         options.append("Exit")
         option, index = pick(options, title, indicator="=>")
