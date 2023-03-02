@@ -33,7 +33,7 @@ class Main:
         else:
             longest_name = 0
         for room in self.server_interface.rooms.values():
-            self.console.print(room)
+            # self.console.print(room)
             name = room["name"].ljust(longest_name)
             names.append(f"{name}({room['type']}) - {len(room['users'])}/{room['max_users']} users | "
                          f"Password: {'Yes' if room['password_protected'] else 'No'} | Joinable: {'Yes' if room['joinable'] else 'No'}")
@@ -110,6 +110,21 @@ class Main:
             room_name = list(self.server_interface.rooms)[index - 1]
             self.console.print(f"Joining room {room_name}...")
             asyncio.run(self.server_interface.join_room(room_name))
+
+
+async def check_server_status(host, port):
+    """
+    Checks if the server is running.
+    :param host:
+    :param port:
+    :return:
+    """
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"http://{host}:{port}/get_server_id") as resp:
+            if resp.status == 200:
+                return True
+            else:
+                return False
 
 
 if __name__ == "__main__":

@@ -51,6 +51,7 @@ class ChessViewer:
 
     def __init__(self, user_hash, server_url, server_port, console: Console):
         self.console = console
+        self.room_name = "Unknown"
         self.user_hash = user_hash
         self.player_color = None
         self.board = chess.Board()
@@ -93,7 +94,7 @@ class ChessViewer:
             Layout(name="spectators", ratio=1),
         )
         self.layout["top"]["game"].split_row(
-            Layout(name="board", ratio=1),
+            Layout(name="board", ratio=1, minimum_size=44),
             Layout(name="game_info", ratio=1),
         )
         self.timer_layout = Layout()
@@ -195,7 +196,7 @@ class ChessViewer:
                                         self.board_state = json["state"]
                                         self.last_move = json["last_move"]
                                         self.timers_enabled = json["timers_enabled"]
-                                        # self.taken_pieces = json["taken_pieces"]
+                                        self.taken_pieces = json["taken_pieces"]
                                         # Play the console bell sound when the board changes
                                         self.console.bell()
                                     else:
@@ -288,7 +289,8 @@ class ChessViewer:
         Draws the game info panel
         :return:
         """
-        text = f"Variant: {self.variant}\n" \
+        text = f"Room Name: {self.room_name}\n" \
+               f"Variant: {self.variant}\n" \
                f"Game State: {self.board_state}\n" \
                f"Taken White Pieces: {self.taken_pieces['white']}\n" \
                f"Taken Black Pieces: {self.taken_pieces['black']}\n"
