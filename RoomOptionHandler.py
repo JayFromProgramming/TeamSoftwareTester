@@ -88,21 +88,6 @@ class Option:
                     else:
                         if key == b"\r":
                             self.selected = False
-            case "str":
-                if msvcrt.kbhit():
-                    # Add the key to the string if it is not a control key (e.g. backspace)
-                    key = msvcrt.getch()
-                    if key == b"\xe0":
-                        key = msvcrt.getch()
-                        if key == b"H":
-                            self.value += "a"
-                        elif key == b"P":
-                            self.value = self.value[:-1]
-                    else:
-                        self.value += key.decode()
-                else:
-                    if key == b"\r":
-                        self.selected = False
             case "list":
                 if msvcrt.kbhit():
                     key = msvcrt.getch()
@@ -138,7 +123,7 @@ class RoomOptionHandler:
 
         for setting_id, setting_info in room_options.items():
             self.room_options[setting_id] = Option(setting_info["name"], setting_info["type"], setting_info["default"],
-                                                   setting_info["cords"])
+                                                   setting_info["cords"], options=setting_info.get("options"))
 
         self.layout = Layout()
 
@@ -150,7 +135,7 @@ class RoomOptionHandler:
         # Split each column into the required rows
         rows = []
         for row in range(num_rows + 1):
-            rows.append(Layout(name=f"row_{row}", size=25))
+            rows.append(Layout(name=f"row_{row}", size=30))
         self.layout.split_row(*rows)
         self.max_cords = (0, num_rows)
 

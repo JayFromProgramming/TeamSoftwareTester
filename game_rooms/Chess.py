@@ -9,6 +9,7 @@ import aiohttp
 import asyncio
 import logging
 import chess
+import chess.variant
 
 from rich.console import Console
 from rich.layout import Layout
@@ -38,13 +39,13 @@ class ChessViewer:
 
     # Arguments that the server needs when creating a new game
     creation_args = {
-        "timers_enabled": {"name": "Timers Enabled", "type": "bool", "default": True, "cords": [0, 0]},
+        "timers_enabled": {"name": "Timers Enabled", "type": "bool", "default": False, "cords": [0, 0]},
         "time_added_per_move": {"name": "Time Added Per Move", "type": "time", "default": 10, "cords": [0, 1]},
         "white_time": {"name": "White Time", "type": "time", "default": 300, "cords": [0, 2]},
         "black_time": {"name": "Black Time", "type": "time", "default": 300, "cords": [0, 3]},
         "chess_variant": {"name": "Chess Variant", "type": "list", "default": "Standard", "cords": [1, 0],
-                          "options": ["Standard", "Chess960", "Crazyhouse", "King of the Hill", "Three Check"]},
-        "starting_fen": {"name": "Starting FEN", "type": "text", "default": "", "cords": [1, 1]},
+                          "options": ["Standard", "Chess960", "Crazyhouse", "Three Check", "King of the Hill",
+                                      "Antichess", "Atomic", "Horde", "Racing Kings"]},
         "allow_spectators": {"name": "Allow Spectators", "type": "bool", "default": True, "cords": [1, 2]},
     }
 
@@ -69,6 +70,7 @@ class ChessViewer:
         self.players = {}
         self.start_time = datetime.datetime.now()
         self.spectators = {}
+        self.variant = "Standard"
 
         self.timers_enabled = False
         self.move_timers = [0, 0]  # type: list[int] # In seconds
@@ -79,7 +81,7 @@ class ChessViewer:
             Layout(name="bottom", ratio=1)
         )
         self.layout["top"].split_row(
-            Layout(name="board", ratio=8),
+            Layout(name="game", ratio=8),
             Layout(name="clients", ratio=4),
         )
         self.layout["bottom"].split_row(
@@ -89,6 +91,10 @@ class ChessViewer:
         self.layout["top"]["clients"].split_column(
             Layout(name="players", ratio=1),
             Layout(name="spectators", ratio=1),
+        )
+        self.layout["top"]["game"].split_row(
+            Layout(name="board", ratio=1),
+            Layout(name="game_info", ratio=1),
         )
         self.timer_layout = Layout()
         self.timer_layout.split_row(
@@ -103,6 +109,34 @@ class ChessViewer:
             return chess.BLACK
         else:
             return None
+
+    def switch_board_variant(self, server_variant):
+        """
+        If the server variant is different from the current board variant, instantiate a new board of the correct variant
+        :return:
+        """
+        if type(self.board).__name__ != server_variant:
+            match server_variant:
+                case "Board":
+                    self.board = chess.Board()
+                case "Chess960Board":
+                    self.board = chess.Board(chess960=True)
+                case "CrazyhouseBoard":
+                    self.board = chess.variant.CrazyhouseBoard()
+                case "ThreeCheckBoard":
+                    self.board = chess.variant.ThreeCheckBoard()
+                case "KingOfTheHillBoard":
+                    self.board = chess.variant.KingOfTheHillBoard()
+                case "AntichessBoard":
+                    self.board = chess.variant.AntichessBoard()
+                case "AtomicBoard":
+                    self.board = chess.variant.AtomicBoard()
+                case "HordeBoard":
+                    self.board = chess.variant.HordeBoard()
+                case "RacingKingsBoard":
+                    self.board = chess.variant.RacingKingsBoard()
+                case _:
+                    self.board = chess.Board()
 
     async def send_save_request(self):
         """
@@ -247,6 +281,17 @@ class ChessViewer:
             self.timer_layout["black_timer"].update(Panel("N/A", style="white", title="Black",
                                                           subtitle_align="center"))
 
+    def game_info_panel(self):
+        """
+        Draws the game info panel
+        :return:
+        """
+        text = f"Variant: {self.variant}\n" \
+               f"Game State: {self.board_state}\n" \
+
+        game_info = Panel(text, style="white", title="Game Info", subtitle_align="center")
+        return game_info
+
     def draw_ui(self):
         # Draw the ui using the Layout object
         board = self.draw_board()
@@ -265,7 +310,8 @@ class ChessViewer:
             else:
                 board_table.add_row(f"Cursor over: Empty square")
         player_table, spectator_table = self.draw_player_table()
-        self.layout["top"]["board"].update(Panel(board_table, title="Board"))
+        self.layout["top"]["game"]["board"].update(Panel(board_table, title="Board"))
+        self.layout["top"]["game"]["game_info"].update(self.game_info_panel())
         self.layout["top"]["clients"]["players"].update(Panel(player_table, title="Players"))
         self.layout["top"]["clients"]["spectators"].update(Panel(spectator_table, title="Spectators"))
         self.layout["bottom"]["last_move"].update(Panel(f"Last Move: {self.last_move}", title="Last move"))

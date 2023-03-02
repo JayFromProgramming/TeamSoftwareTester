@@ -163,12 +163,13 @@ class ServerInterface:
         room_type = pick(valid_rooms, "Please choose a room type:", indicator="=>")[0]
 
         settings = RoomOptionHandler(self.console, self.room_handlers[room_type].creation_args)
-        settings = settings.query()
+        settings.query()
+        settings = settings.get_options()
 
         async with aiohttp.ClientSession() as session:
             async with session.post(f"http://{self.host}:{self.port}/create_room",
                                     json={"room_name": room_name, "room_type": room_type,
-                                          "room_settings": settings},
+                                          "room_config": settings},
                                     cookies={"hash_id": self.user_hash}) as response:
                 if response.status == 200:
                     self.console.print(f"Room {room_name} created!")
