@@ -10,11 +10,7 @@ import aiohttp
 import asyncio
 import json
 
-from rich.progress_bar import ProgressBar
-
 from ServerInterface import ServerInterface
-from game_rooms import Chess
-from game_rooms.Chess import ChessViewer
 
 
 class Main:

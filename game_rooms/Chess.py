@@ -18,6 +18,16 @@ from rich.table import Table
 from rich.live import Live
 
 from aiohttp import web
+from rich.text import Text
+
+
+def bool_to_color(value):
+    if value is True:
+        return chess.WHITE
+    elif value is False:
+        return chess.BLACK
+    else:
+        return None
 
 
 class ChessViewer:
@@ -103,14 +113,6 @@ class ChessViewer:
             Layout(name="black_timer", ratio=1),
         )
 
-    def bool_to_color(self, value):
-        if value is True:
-            return chess.WHITE
-        elif value is False:
-            return chess.BLACK
-        else:
-            return None
-
     def switch_board_variant(self, server_variant):
         """
         If the server variant is different from the current board variant, instantiate a new board of the correct variant
@@ -188,8 +190,8 @@ class ChessViewer:
                                         json = await resp.json()
                                         self.switch_board_variant(json["variant"])  # Switch the board variant if needed
                                         board_epd = json["board"]
-                                        current_color = self.bool_to_color(json["current_player"])
-                                        self.player_color = self.bool_to_color(json["your_color"])
+                                        current_color = bool_to_color(json["current_player"])
+                                        self.player_color = bool_to_color(json["your_color"])
                                         # Update the board state
                                         self.board.set_epd(board_epd)
                                         self.board.turn = current_color
@@ -245,6 +247,17 @@ class ChessViewer:
                 if move.to_square in chess.SquareSet(chess.BB_RANK_8) or move.to_square in chess.SquareSet(chess.BB_RANK_1):
                     return True
 
+    def piece_has_valid_moves(self, piece, square):
+        """
+        Checks if a piece has any valid moves
+        :param piece: A chess.Piece object
+        :return:
+        """
+        for move in self.board.legal_moves:
+            if move.from_square == square:
+                return True
+        return False
+
     def valid_cursor_selection(self):
         """
         Checks if the cursor is over a valid piece
@@ -252,10 +265,12 @@ class ChessViewer:
         """
         if self.board.turn != self.player_color:
             return False
-        piece = self.board.piece_at(chess.square(self.cursor[1], self.cursor[0]))
-        if not self.piece_selected:
-            if piece is not None:
-                if piece.color == self.board.turn:
+        square = chess.square(self.cursor[1], self.cursor[0])
+        piece = self.board.piece_at(square)
+        if not self.piece_selected:  # If no piece is selected, check if the cursor is over a valid piece
+            if piece is not None:  # Check if the cursor is over a piece
+                if piece.color == self.board.turn and self.piece_has_valid_moves(piece, square):
+                    # Check if the piece has any valid moves
                     return True
             return False
         else:  # If a piece is already selected, check if the cursor is over a valid move
@@ -270,18 +285,22 @@ class ChessViewer:
         :return:
         """
         if self.timers_enabled:
-            self.timer_layout["white_timer"].update(Panel(f"[center]{datetime.timedelta(seconds=self.move_timers[0])}[/center]",
-                                                          style="white" if self.move_timers[0] > 30 else "orange"
+            self.timer_layout["white_timer"].update(Panel(Text(f"{datetime.timedelta(seconds=self.move_timers[0])}",
+                                                               justify="center"),
+                                                          style="white" if self.move_timers[0] > 30 else "orange_red1"
                                                           if self.move_timers[0] > 0 else "red",
                                                           title="White", subtitle_align="center"))
-            self.timer_layout["black_timer"].update(Panel(f"[center]{datetime.timedelta(seconds=self.move_timers[1])}[/center]",
-                                                          style="white" if self.move_timers[1] > 30 else "orange"
+            self.timer_layout["black_timer"].update(Panel(Text(f"{datetime.timedelta(seconds=self.move_timers[1])}",
+                                                               justify="center"),
+                                                          style="white" if self.move_timers[1] > 30 else "orange_red1"
                                                           if self.move_timers[1] > 0 else "red",
                                                           title="Black", subtitle_align="center"))
         else:
-            self.timer_layout["white_timer"].update(Panel("N/A", style="white", title="White",
+            self.timer_layout["white_timer"].update(Panel(Text(f"N/A", justify="center"),
+                                                          style="white", title="White",
                                                           subtitle_align="center"))
-            self.timer_layout["black_timer"].update(Panel("N/A", style="white", title="Black",
+            self.timer_layout["black_timer"].update(Panel(Text(f"N/A", justify="center"),
+                                                          style="white", title="Black",
                                                           subtitle_align="center"))
 
     def game_info_panel(self):
@@ -314,7 +333,9 @@ class ChessViewer:
         board_table.add_row(f"It's [bold]{self.color_to_str(self.board.turn)}[/bold]'s turn,"
                             f" you are [bold]{self.color_to_str(self.player_color)}[/bold]")
         board_table.add_row(board)
-        if self.piece_selected:
+        if self.move_queued:
+            board_table.add_row(f"Move queued: {self.queued_move}")
+        elif self.piece_selected:
             board_table.add_row(f"Selected piece: {self.selected_piece}")
         else:
             over_piece = self.board.piece_at(chess.square(self.cursor[1], self.cursor[0]))

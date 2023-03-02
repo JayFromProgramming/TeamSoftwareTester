@@ -55,15 +55,15 @@ class Option:
                      padding=1,
                      expand=True)
 
-    def _arrow_input(self):
+    def _arrow_input(self, increment=1):
         if msvcrt.kbhit():
             key = msvcrt.getch()
             if key == b"\xe0":
                 key = msvcrt.getch()
                 if key == b"H":
-                    self.value += 1
+                    self.value += increment
                 elif key == b"P":
-                    self.value -= 1
+                    self.value -= increment
             else:
                 if key == b"\r":
                     self.selected = False
@@ -108,7 +108,7 @@ class Option:
                             self.selected = False
 
             case "time":
-                self._arrow_input()
+                self._arrow_input(increment=10)
 
 
 class RoomOptionHandler:
