@@ -116,6 +116,7 @@ class ChessViewer:
         :return:
         """
         if type(self.board).__name__ != server_variant:
+            self.variant = server_variant
             match server_variant:
                 case "Board":
                     self.board = chess.Board()
@@ -182,9 +183,9 @@ class ChessViewer:
                             async with aiohttp.ClientSession() as session:
                                 async with session.get(f"http://{self.server_url}:{self.server_port}/room/get_state",
                                                        cookies={"user_hash": self.user_hash}) as resp:
-                                    self.switch_board_variant(json["variant"]) # Switch the board variant if needed
                                     if resp.status == 200:
                                         json = await resp.json()
+                                        self.switch_board_variant(json["variant"])  # Switch the board variant if needed
                                         board_epd = json["board"]
                                         current_color = self.bool_to_color(json["current_player"])
                                         self.player_color = self.bool_to_color(json["your_color"])
