@@ -49,9 +49,9 @@ class ChessViewer:
         "allow_spectators": {"name": "Allow Spectators", "type": "bool", "default": True, "cords": [1, 2]},
     }
 
-    def __init__(self, user_hash, server_url, server_port, console: Console):
+    def __init__(self, user_hash, server_url, server_port, console: Console, room_name="Unknown"):
         self.console = console
-        self.room_name = "Unknown"
+        self.room_name = room_name
         self.user_hash = user_hash
         self.player_color = None
         self.board = chess.Board()

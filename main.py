@@ -26,20 +26,17 @@ class Main:
             json.dump({}, open("servers.json", "w"))
 
         self.servers = json.load(open("servers.json", "r"))
-
-        self.progress_bar = ProgressBar(total=len(self.servers))
+        self.console.print("Checking server status...")
         for server, info in self.servers.copy().items():
             online = asyncio.run(self.check_server_status(info["host"], info["port"]))
             if not online:
-                self.console.print(f"Server {info['name']} is offline.")
+                self.console.print(f"{info['name']}@{info['host']}:{info['port']}".ljust(45) + " - [red]OFFLINE[/red]")
                 self.servers[server]["online"] = False
             else:
-                self.console.print(f"Server {info['name']} is online.")
+                self.console.print(f"{info['name']}@{info['host']}:{info['port']}".ljust(45) + f" - [green]ONLINE - {online:.2f}ms[/green]")
                 self.servers[server]["online"] = True
-            self.progress_bar.update(completed=1)
 
-        for server, info in self.servers.items():
-            self.console.print(f"{info['name']} - {info['host']}:{info['port']}")
+        time.sleep(1)
 
         title = "Please choose a server: "
         options = [f"{info['name']} @ {info['host']}:{info['port']} - {'Online' if info['online'] else 'Offline'}"
@@ -68,13 +65,12 @@ class Main:
         :return:
         """
         try:
+            start_time = time.time()
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"http://{host}:{port}/get_server_id") as response:
                     if response.status == 200:
-                        json = await response.json()
-                        # self.server_id = json["server_id"]
-                        # self.server_name = json["server_name"]
-                        return True
+                        # Get the response time
+                        return (time.time() - start_time) * 1000
                     else:
                         return False
         except Exception as e:

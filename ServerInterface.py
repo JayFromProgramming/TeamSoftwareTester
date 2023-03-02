@@ -38,7 +38,7 @@ class ServerInterface:
         asyncio.run(self.get_server_id())
 
         if self.server_id in self.servers:
-            asyncio.run(self.get_user(self.servers[self.server_id]))
+            asyncio.run(self.get_user(self.servers[self.server_id]["user_hash"]))
         else:
             username = self.console.input("Please enter a username: ")
             asyncio.run(self.create_user(username))
@@ -46,8 +46,8 @@ class ServerInterface:
 
         self.console.print(f"Logged in as {self.user_name}")
         # Save the login
-        self.servers[self.server_id] = {"host": self.host, "port": self.port, "user_hash": self.user_hash,
-                                        'name': self.server_name}
+        self.servers.update({self.server_id: {"host": self.host, "port": self.port, "user_hash": self.user_hash,
+                                              'name': self.server_name}})
         json.dump(self.servers, open("servers.json", "w"), indent=4)
 
         asyncio.run(self.get_rooms())
@@ -59,7 +59,7 @@ class ServerInterface:
                     json = await response.json()
                     self.server_id = json["server_id"]
                     self.server_name = json["server_name"]
-                    self.console.print(f"Server ID: {self.server_id}")
+                    self.console.print(f"Server ID: {self.server_id}\nServer Name: {self.server_name}")
                 else:
                     self.console.print(f"Failed to get server id: {response.status}")
 
@@ -86,7 +86,7 @@ class ServerInterface:
                     username = self.console.input("Please enter a username: ")
                     hash = await self.create_user(username)
                     self.user_hash = hash
-                    self.user_hash = username
+                    self.user_name = username
 
     async def get_rooms(self):
         async with aiohttp.ClientSession() as session:
@@ -150,7 +150,7 @@ class ServerInterface:
 
         # Get the room type and create an instance of it
         room_type = self.rooms[room_name]["type"]
-        room = self.room_handlers[room_type](self.user_hash, self.host, self.port, self.console)
+        room = self.room_handlers[room_type](self.user_hash, self.host, self.port, self.console, room_name)
         await room.main()
 
     async def create_room(self):
@@ -173,7 +173,7 @@ class ServerInterface:
                                     cookies={"hash_id": self.user_hash}) as response:
                 if response.status == 200:
                     self.console.print(f"Room {room_name} created!")
-                    room = self.room_handlers[room_type](self.user_hash, self.host, self.port, self.console)
+                    room = self.room_handlers[room_type](self.user_hash, self.host, self.port, self.console, room_name)
                     await room.main()
                 else:
                     self.console.print(f"Failed to create room {room_name}, status code: {response.status}")
