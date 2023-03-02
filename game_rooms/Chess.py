@@ -289,11 +289,20 @@ class ChessViewer:
         Draws the game info panel
         :return:
         """
+        taken_black_pieces = []
+        taken_white_pieces = []
+        for piece in self.taken_pieces["black"]:
+            chess_piece = chess.Piece.from_symbol(piece)
+            taken_black_pieces.append(self.piece_character(chess_piece))
+        for piece in self.taken_pieces["white"]:
+            chess_piece = chess.Piece.from_symbol(piece)
+            taken_white_pieces.append(self.piece_character(chess_piece))
+
         text = f"Room Name: {self.room_name}\n" \
                f"Variant: {self.variant}\n" \
                f"Game State: {self.board_state}\n" \
-               f"Taken White Pieces: {self.taken_pieces['white']}\n" \
-               f"Taken Black Pieces: {self.taken_pieces['black']}\n"
+               f"Taken White Pieces:{len(taken_white_pieces)}\n{''.join(taken_white_pieces)}\n" \
+               f"Taken Black Pieces:{len(taken_black_pieces)}\n{''.join(taken_black_pieces)}\n"
         game_info = Panel(text, style="white", title="Game Info", subtitle_align="center")
         return game_info
 
@@ -332,7 +341,7 @@ class ChessViewer:
         if piece.color == chess.WHITE:
             return f"[underline white]{piece.unicode_symbol()}[/underline white]"
         else:
-            return piece.unicode_symbol()
+            return f"[grey19]{piece.unicode_symbol()}[/grey19]"
 
     def draw_player_table(self):
         player_table = Table(show_header=True, show_lines=True, expand=True)

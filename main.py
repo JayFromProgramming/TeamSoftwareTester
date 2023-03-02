@@ -10,6 +10,8 @@ import aiohttp
 import asyncio
 import json
 
+from rich.progress_bar import ProgressBar
+
 from ServerInterface import ServerInterface
 from game_rooms import Chess
 from game_rooms.Chess import ChessViewer
@@ -17,13 +19,66 @@ from game_rooms.Chess import ChessViewer
 
 class Main:
 
-    def __init__(self, host="localhost", port=47675, anonymous=False):
+    def __init__(self):
         self.console = Console()
-        self.host = host
-        self.port = port
+
+        if not os.path.exists("servers.json"):
+            json.dump({}, open("servers.json", "w"))
+
+        self.servers = json.load(open("servers.json", "r"))
+
+        self.progress_bar = ProgressBar(total=len(self.servers))
+        for server, info in self.servers.copy().items():
+            online = asyncio.run(self.check_server_status(info["host"], info["port"]))
+            if not online:
+                self.console.print(f"Server {info['name']} is offline.")
+                self.servers[server]["online"] = False
+            else:
+                self.console.print(f"Server {info['name']} is online.")
+                self.servers[server]["online"] = True
+            self.progress_bar.update(completed=1)
+
+        for server, info in self.servers.items():
+            self.console.print(f"{info['name']} - {info['host']}:{info['port']}")
+
+        title = "Please choose a server: "
+        options = [f"{info['name']} @ {info['host']}:{info['port']} - {'Online' if info['online'] else 'Offline'}"
+                   for server, info in self.servers.items()]
+        options.append("Add New Server")
+        options.append("Exit")
+        option, index = pick(options, title, indicator="=>")
+
+        if option == "Add New Server":
+            host = self.console.input("Please enter the host: ")
+            port = self.console.input("Please enter the port: ")
+        elif option == "Exit":
+            sys.exit(0)
+        else:
+            # Determine selection from index
+            host = self.servers[list(self.servers.keys())[index]]["host"]
+            port = self.servers[list(self.servers.keys())[index]]["port"]
+
         # Look for user.txt in the same directory as this file.
         # If it doesn't exist, connect to the server and create a new user.
-        self.server_interface = ServerInterface(host=self.host, port=self.port, console=self.console)
+        self.server_interface = ServerInterface(host=host, port=port, console=self.console)
+
+    async def check_server_status(self, host, port):
+        """
+        Checks the status of the server.
+        :return:
+        """
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"http://{host}:{port}/get_server_id") as response:
+                    if response.status == 200:
+                        json = await response.json()
+                        # self.server_id = json["server_id"]
+                        # self.server_name = json["server_name"]
+                        return True
+                    else:
+                        return False
+        except Exception as e:
+            return False
 
     def build_name_list(self):
         names = []
@@ -112,31 +167,6 @@ class Main:
             asyncio.run(self.server_interface.join_room(room_name))
 
 
-async def check_server_status(host, port):
-    """
-    Checks if the server is running.
-    :param host:
-    :param port:
-    :return:
-    """
-    async with aiohttp.ClientSession() as session:
-        async with session.get(f"http://{host}:{port}/get_server_id") as resp:
-            if resp.status == 200:
-                return True
-            else:
-                return False
-
-
 if __name__ == "__main__":
     # Check if this client should be ananonymous via a command line argument
-    # host = "wopr.eggs.loafclan.org"
-    host = "141.219.208.99"
-    # host = "localhost"
-    port = 47675
-    if len(sys.argv) > 1:
-        if sys.argv[1] == "--anonymous":
-            Main(host, port, anonymous=True).main()
-            exit(0)
-        else:
-            print("Invalid argument")
-    Main(host=host, port=port).main()
+    Main().main()

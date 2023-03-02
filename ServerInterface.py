@@ -21,6 +21,7 @@ class ServerInterface:
         self.host = host
         self.port = port
         self.server_id = None
+        self.server_name = None
         self.user_hash = None
         self.user_name = None
         self.rooms = {}
@@ -32,15 +33,12 @@ class ServerInterface:
         if not console:
             self.console = Console()
 
-        if not os.path.exists("logins.json"):
-            json.dump({}, open("logins.json", "w"))
-
-        self.logins = json.load(open("logins.json", "r"))
+        self.servers = json.load(open("servers.json", "r"))
 
         asyncio.run(self.get_server_id())
 
-        if self.server_id in self.logins:
-            asyncio.run(self.get_user(self.logins[self.server_id]))
+        if self.server_id in self.servers:
+            asyncio.run(self.get_user(self.servers[self.server_id]))
         else:
             username = self.console.input("Please enter a username: ")
             asyncio.run(self.create_user(username))
@@ -48,8 +46,9 @@ class ServerInterface:
 
         self.console.print(f"Logged in as {self.user_name}")
         # Save the login
-        self.logins[self.server_id] = self.user_hash
-        json.dump(self.logins, open("logins.json", "w"), indent=4)
+        self.servers[self.server_id] = {"host": self.host, "port": self.port, "user_hash": self.user_hash,
+                                        'name': self.server_name}
+        json.dump(self.servers, open("servers.json", "w"), indent=4)
 
         asyncio.run(self.get_rooms())
 
@@ -59,6 +58,7 @@ class ServerInterface:
                 if response.status == 200:
                     json = await response.json()
                     self.server_id = json["server_id"]
+                    self.server_name = json["server_name"]
                     self.console.print(f"Server ID: {self.server_id}")
                 else:
                     self.console.print(f"Failed to get server id: {response.status}")
