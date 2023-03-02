@@ -119,21 +119,21 @@ class ChessViewer:
             match server_variant:
                 case "Board":
                     self.board = chess.Board()
-                case "Chess960Board":
+                case "Chess960":
                     self.board = chess.Board(chess960=True)
-                case "CrazyhouseBoard":
+                case "Crazyhouse":
                     self.board = chess.variant.CrazyhouseBoard()
-                case "ThreeCheckBoard":
+                case "Three Check":
                     self.board = chess.variant.ThreeCheckBoard()
-                case "KingOfTheHillBoard":
+                case "King of the Hill":
                     self.board = chess.variant.KingOfTheHillBoard()
-                case "AntichessBoard":
+                case "Antichess":
                     self.board = chess.variant.AntichessBoard()
-                case "AtomicBoard":
+                case "Atomic":
                     self.board = chess.variant.AtomicBoard()
-                case "HordeBoard":
+                case "Horde":
                     self.board = chess.variant.HordeBoard()
-                case "RacingKingsBoard":
+                case "Racing Kings":
                     self.board = chess.variant.RacingKingsBoard()
                 case _:
                     self.board = chess.Board()
@@ -182,6 +182,7 @@ class ChessViewer:
                             async with aiohttp.ClientSession() as session:
                                 async with session.get(f"http://{self.server_url}:{self.server_port}/room/get_state",
                                                        cookies={"user_hash": self.user_hash}) as resp:
+                                    self.switch_board_variant(json["variant"]) # Switch the board variant if needed
                                     if resp.status == 200:
                                         json = await resp.json()
                                         board_epd = json["board"]
