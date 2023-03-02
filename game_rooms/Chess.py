@@ -290,7 +290,8 @@ class ChessViewer:
         """
         text = f"Variant: {self.variant}\n" \
                f"Game State: {self.board_state}\n" \
-
+               f"Taken White Pieces: {self.taken_pieces['white']}\n" \
+               f"Taken Black Pieces: {self.taken_pieces['black']}\n"
         game_info = Panel(text, style="white", title="Game Info", subtitle_align="center")
         return game_info
 
