@@ -244,8 +244,12 @@ class ChessViewer:
         piece = self.board.piece_at(move.from_square)
         if piece is not None:
             if piece.piece_type == chess.PAWN:
-                if move.to_square in chess.SquareSet(chess.BB_RANK_8) or move.to_square in chess.SquareSet(chess.BB_RANK_1):
-                    return True
+                if self.board.turn == chess.WHITE:
+                    if move.to_square in chess.SquareSet(chess.BB_RANK_8) and move.from_square in chess.SquareSet(chess.BB_RANK_7):
+                        return True
+                else:
+                    if move.to_square in chess.SquareSet(chess.BB_RANK_1) and move.from_square in chess.SquareSet(chess.BB_RANK_2):
+                        return True
 
     def piece_has_valid_moves(self, piece, square):
         """
