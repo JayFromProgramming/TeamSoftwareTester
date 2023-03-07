@@ -1,9 +1,12 @@
+import struct
+
 import aiohttp
 from pick import pick
 
 import os
 import json
 import asyncio
+
 
 from rich.console import Console
 from rich.layout import Layout
@@ -16,7 +19,7 @@ from game_rooms.Chess import ChessViewer
 
 class ServerInterface:
 
-    def __init__(self, host="localhost", port=47675, console=None):
+    def __init__(self, host, port, console):
         self.console = console
         self.host = host
         self.port = port
@@ -34,7 +37,6 @@ class ServerInterface:
             self.console = Console()
 
         self.servers = json.load(open("servers.json", "r"))
-
         asyncio.run(self.get_server_id())
 
         if self.server_id in self.servers:
@@ -51,6 +53,7 @@ class ServerInterface:
         json.dump(self.servers, open("servers.json", "w"), indent=4)
 
         asyncio.run(self.get_rooms())
+
 
     async def get_server_id(self):
         async with aiohttp.ClientSession() as session:
