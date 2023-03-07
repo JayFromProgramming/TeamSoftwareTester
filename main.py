@@ -209,10 +209,10 @@ class Main:
         """
         self.console.print("Preforming multicast discovery...")
         # Preform a multicast discovery on all network interfaces
-        multicast_group = ('225.0.0.250', 5007)
+        multicast_group = ('224.1.1.1', 5007)
 
         # Create the socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
 
         # Set a timeout so the socket does not block indefinitely when trying
         # to receive data.
