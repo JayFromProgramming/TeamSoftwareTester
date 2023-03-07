@@ -207,45 +207,40 @@ class Main:
         """
         Send a multicast message to find servers on the network
         """
-        self.console.print("Preforming multicast discovery...")
-        # Preform a multicast discovery on all network interfaces
-        multicast_group = ('224.1.1.1', 5007)
-
+        self.console.print("Preforming broadcast discovery...")
         # Create the socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-
-        # Set a timeout so the socket does not block indefinitely when trying
-        # to receive data.
-        sock.settimeout(1)
-
-        # Set the time-to-live for messages to 1 so they do not go past the
-        # local network segment.
-        ttl = struct.pack('b', 5)
+        # Allow multiple sockets to use the same PORT number
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Set a timeout so the socket does not block indefinitely when trying to receive data.
+        sock.settimeout(0.2)
+        # Set the time-to-live for messages to 1 so they do not go past the local network segment.
+        ttl = struct.pack('b', 1)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
-        servers = {}
-        try:
-            # Send data to the multicast group
-            # self.console.print('sending "%s"' % "DISCOVER")
-            start_time = time.time()
-            sent = sock.sendto("DISCOVER".encode(), multicast_group)
-            # Look for responses from all recipients
-            while True:
-                try:
-                    data, server = sock.recvfrom(1024)
-                    end_time = time.time()
-                    json_data = json.loads(data.decode())
-                    for host in json_data["host"]:
-                        if server[0] == host:
-                            json_data["host"] = host
-                    json_data["response_time"] = (end_time - start_time) * 1000
-                    json_data["online"] = True
-                    servers.update({json_data["server_id"]: json_data})
-                except socket.timeout:
-                    break
-        except Exception as e:
-            self.console.print(f"{type(e)}: {e}")
+        # Allow the socket to send broadcast messages
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        # Broadcast the message
+        message = "DISCOVER_SERVER_REQUEST"
+        sock.bind(('0.0.0.0', 37020))
 
-        return servers
+        start_time = time.time()
+        sock.sendto(message.encode(), ('<broadcast>', 37020))
+
+        servers = {}
+
+        while True:
+            try:
+                data, server = sock.recvfrom(1024)
+                end_time = time.time()
+                json_data = json.loads(data.decode())
+                for host in json_data["host"]:
+                    if server[0] == host:
+                        json_data["host"] = host
+                json_data["response_time"] = (end_time - start_time) * 1000
+                json_data["online"] = True
+                servers.update({json_data["server_id"]: json_data})
+            except socket.timeout:
+                break
 
 
 if __name__ == "__main__":
