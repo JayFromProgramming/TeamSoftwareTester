@@ -49,7 +49,7 @@ class ServerInterface:
         self.console.print(f"Logged in as {self.user_name}")
         # Save the login
         self.servers.update({self.server_id: {"host": self.host, "port": self.port, "user_hash": self.user_hash,
-                                              'name': self.server_name}})
+                                              'name': self.server_name, "online": None, "known": True}})
         json.dump(self.servers, open("servers.json", "w"), indent=4)
 
         asyncio.run(self.get_rooms())

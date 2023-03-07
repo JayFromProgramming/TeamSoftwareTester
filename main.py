@@ -1,3 +1,4 @@
+import ipaddress
 import os
 import struct
 import sys
@@ -11,8 +12,26 @@ import aiohttp
 import asyncio
 import json
 import socket
+import netifaces
 
 from ServerInterface import ServerInterface
+
+
+def get_interfaces():
+    """
+    Gets all the ip addresses that can be bound to
+    """
+    interfaces = []
+    for interface in netifaces.interfaces():
+        try:
+            if netifaces.AF_INET in netifaces.ifaddresses(interface):
+                for link in netifaces.ifaddresses(interface)[netifaces.AF_INET]:
+                    if link["addr"] != "":
+                        interfaces.append(link["addr"])
+        except Exception as e:
+            # logging.debug(f"Error getting interface {interface}: {e}")
+            pass
+    return interfaces
 
 
 class Main:
@@ -24,9 +43,20 @@ class Main:
         if not os.path.exists("servers.json"):
             json.dump({}, open("servers.json", "w"))
 
-        self.servers = json.load(open("servers.json", "r"))
-        self.servers.update(discovered_servers)
+        loaded_servers = json.load(open("servers.json", "r"))
+        discovered_servers.update(loaded_servers)
+        self.servers = discovered_servers
         self.console.print("Checking server status...")
+
+        for server, info in self.servers.copy().items():
+            if not info["online"]:
+                status = asyncio.run(self.check_server_status(info['host'], info["port"]))
+                if status:
+                    self.servers[server]["online"] = True
+                    self.servers[server]["response_time"] = status
+                else:
+                    self.servers[server]["online"] = False
+                    self.servers[server]["response_time"] = None
 
         for server, info in self.servers.copy().items():
             if not info["online"]:
@@ -178,25 +208,26 @@ class Main:
         Send a multicast message to find servers on the network
         """
         self.console.print("Preforming multicast discovery...")
-        multicast_group = ('225.0.0.250', 47674)
+        # Preform a multicast discovery on all network interfaces
+        multicast_group = ('225.0.0.250', 5007)
 
         # Create the socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         # Set a timeout so the socket does not block indefinitely when trying
         # to receive data.
-        sock.settimeout(0.2)
+        sock.settimeout(1)
 
         # Set the time-to-live for messages to 1 so they do not go past the
         # local network segment.
-        ttl = struct.pack('b', 1)
+        ttl = struct.pack('b', 5)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
         servers = {}
         try:
             # Send data to the multicast group
             # self.console.print('sending "%s"' % "DISCOVER")
-            sent = sock.sendto("DISCOVER".encode(), multicast_group)
             start_time = time.time()
+            sent = sock.sendto("DISCOVER".encode(), multicast_group)
             # Look for responses from all recipients
             while True:
                 try:
@@ -208,7 +239,7 @@ class Main:
                             json_data["host"] = host
                     json_data["response_time"] = (end_time - start_time) * 1000
                     json_data["online"] = True
-                    servers.update({server[0]: json_data})
+                    servers.update({json_data["server_id"]: json_data})
                 except socket.timeout:
                     break
         except Exception as e:
