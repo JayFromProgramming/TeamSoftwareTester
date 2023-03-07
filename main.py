@@ -221,7 +221,7 @@ class Main:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         # Broadcast the message
         message = "DISCOVER_SERVER_REQUEST"
-        sock.bind(('0.0.0.0', 37020))
+        sock.bind(('0.0.0.0', 37021))
 
         start_time = time.time()
         sock.sendto(message.encode(), ('<broadcast>', 37020))
@@ -232,6 +232,7 @@ class Main:
             try:
                 data, server = sock.recvfrom(1024)
                 end_time = time.time()
+                print(f"Received {data} from {server}")
                 json_data = json.loads(data.decode())
                 for host in json_data["host"]:
                     if server[0] == host:
@@ -241,6 +242,8 @@ class Main:
                 servers.update({json_data["server_id"]: json_data})
             except socket.timeout:
                 break
+
+        return servers
 
 
 if __name__ == "__main__":
