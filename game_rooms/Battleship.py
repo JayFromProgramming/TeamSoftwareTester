@@ -137,6 +137,9 @@ class BattleShip(BaseRoom):
                         if "frequent_update" in json:
                             self.players = json["frequent_update"]["players"]
                             self.spectators = json["frequent_update"]["spectators"]
+                            if force:
+                                self.player_ships = []
+                                self.opponent_ships = []
                         if json["changed"] or force:
                             async with aiohttp.ClientSession() as session:
                                 async with session.get(f"http://{self.server_url}:{self.server_port}/room/get_state",

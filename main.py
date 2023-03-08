@@ -115,7 +115,7 @@ class Main:
         try:
             start_time = time.time()
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"http://{host}:{port}/get_server_id") as response:
+                async with session.get(f"http://{host}:{port}/get_server_id", timeout=5) as response:
                     if response.status == 200:
                         # Get the response time
                         return (time.time() - start_time) * 1000
@@ -232,6 +232,7 @@ class Main:
                 sock.sendto(b"DISCOVER_GAME_SERVER", (broadcast, port))
             except Exception as e:
                 pass
+
         try:
             while True:
                 try:
@@ -249,6 +250,8 @@ class Main:
                         servers.update({json_data["server_id"]: json_data})
                 except socket.timeout:
                     break
+                except Exception as e:
+                    pass
         except Exception as e:
             self.console.print(f"{type(e)}: {e}")
 
