@@ -48,7 +48,10 @@ class Main:
         self.servers = discovered_servers
         self.console.print("Checking server status...")
 
-        longest_name = max([len(server['name']) for _, server in discovered_servers.items()])
+        if len(self.servers) != 0:
+            longest_name = max([len(server['name']) for _, server in discovered_servers.items()])
+        else:
+            longest_name = 0
 
         for server, info in self.servers.copy().items():
             if not info["online"]:
