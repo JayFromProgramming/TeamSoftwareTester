@@ -152,7 +152,7 @@ class BattleShip(BaseRoom):
                                         self.opponent_board = json["enemy_board"]
                                         self.state = json["state"]
                                         self.current_player = json["current_player"]
-                                        self.place_ships = json["allow_place_ships"]
+                                        self.place_ships = json["allow_place_ships"] if "allow_place_ships" in json else False
                                         if not self.player_ships:
                                             self.player_ships = \
                                                 [self.Ship(**ship) for ship in self.player_board["ships"]]
