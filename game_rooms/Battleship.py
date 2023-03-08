@@ -45,12 +45,20 @@ class BattleShip(BaseRoom):
             if self.x is None or self.y is None:
                 return False
             if self.direction == "horizontal":
-                if self.x <= x <= self.x + self.size and self.y == y:
+                if self.x <= x <= self.x + (self.size - 1) and self.y == y:
                     return True
             else:
-                if self.y <= y <= self.y + self.size and self.x == x:
+                if self.y <= y <= self.y + (self.size - 1) and self.x == x:
                     return True
             return False
+
+        def net_update(self, size, sunk, placed, x=None, y=None, direction=None):
+            self.size = size
+            self.sunk = sunk
+            self.placed = placed
+            self.x = x
+            self.y = y
+            self.direction = direction
 
         def state_str(self):
             if self.placed:
@@ -71,6 +79,12 @@ class BattleShip(BaseRoom):
                 "direction": self.direction,
                 "size": self.size
             }
+
+        def rotate(self):
+            if self.direction == "horizontal":
+                self.direction = "vertical"
+            else:
+                self.direction = "horizontal"
 
     def __init__(self, user_hash, server_url, server_port, console: Console, room_name="Unknown"):
         super().__init__(user_hash, server_url, server_port, console, room_name)
@@ -136,9 +150,18 @@ class BattleShip(BaseRoom):
                                         self.state = json["state"]
                                         self.current_player = json["current_player"]
                                         self.place_ships = json["allow_place_ships"]
-                                        if not self.place_ships and self.player_ships == []:
-                                            self.player_ships = [self.Ship(**ship) for ship in self.player_board["ships"]]
-                                        self.opponent_ships = [self.Ship(**ship) for ship in self.opponent_board["ships"]]
+                                        if not self.player_ships:
+                                            self.player_ships = \
+                                                [self.Ship(**ship) for ship in self.player_board["ships"]]
+                                        else:
+                                            for i, ship in enumerate(self.player_ships):
+                                                ship.net_update(**self.player_board["ships"][i])
+                                        if not self.opponent_ships:
+                                            self.opponent_ships = \
+                                                [self.Ship(**ship) for ship in self.opponent_board["ships"]]
+                                        else:
+                                            for i, ship in enumerate(self.opponent_ships):
+                                                ship.net_update(**self.opponent_board["ships"][i])
                                         self.board_size = json["board_size"]
         except Exception as e:
             self.console.print(f"Board Update Error: {e}\n{traceback.format_exc()}")
@@ -156,7 +179,7 @@ class BattleShip(BaseRoom):
                     }
                 async with session.post(f"http://{self.server_url}:{self.server_port}/room/make_move",
                                         cookies={"user_hash": self.user_hash},
-                                        json=move) as resp:
+                                        json={"move": move}) as resp:
                     if resp.status == 200:
                         json = await resp.json()
                         if json is None:
@@ -183,9 +206,9 @@ class BattleShip(BaseRoom):
             for tile in board_row:
                 if [ship.on_tile(column_num, row_num) for ship in ships].count(True) > 0:
                     if tile == 1:
-                        row.append("[red]■[/red]")
+                        row.append("[red bold]■[/red bold]")
                     else:
-                        row.append("[blue]■[/blue]")
+                        row.append("[white bold]■[/white bold]")
                 else:
                     if tile == 1:
                         row.append("[red]X[/red]")
@@ -231,7 +254,7 @@ class BattleShip(BaseRoom):
                     self.cursor[1] -= 1 if self.cursor[1] > 0 else 0
                 case b'M':
                     self.cursor[1] += 1 if self.cursor[1] < self.board_size - 1 else 0
-                case b'E':
+                case b'e':
                     if self.place_ships:
                         if self.placing_ship:
                             self.placing_ship.rotate()
@@ -240,14 +263,16 @@ class BattleShip(BaseRoom):
                 case b' ':
                     if self.place_ships:
                         # Get the first ship that is not placed
+                        if self.placing_ship is not None:
+                            self.placing_ship.placed = True
+                            await self.send_move()
+                            self.placing_ship = None
+
                         for ship in self.player_ships:
                             if not ship.placed:
                                 self.console.print(f"Placing ship {ship.size}")
                                 self.placing_ship = ship
                                 break
-                        if self.placing_ship is not None:
-                            self.placing_ship.place(self.cursor[0], self.cursor[1])
-                            await self.send_move()
                     else:
                         if not self.attack_queued:
                             self.queued_attack = self.cursor
@@ -268,11 +293,12 @@ class BattleShip(BaseRoom):
             while True:
                 if loops % 14 == 0:
                     await self.get_board(False)
+                    loops = 0
                 await self.keyboard_thread()
                 live.update(self.draw_ui())
                 loops += 1
 
-                await asyncio.sleep(14 / 60)
+                await asyncio.sleep(1/14)
 
     async def main(self):
         await self.get_board(True)
