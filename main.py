@@ -210,24 +210,18 @@ class Main:
         self.console.print("Preforming multicast discovery...")
         multicast_group = ('224.1.1.1', 5007)
 
-        # Create the socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # create UDP socket
         sock.bind(('', 0))
-
-        # Set a timeout so the socket does not block indefinitely when trying
-        # to receive data.
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         sock.settimeout(1)
 
-        # Set the time-to-live for messages to 1 so they do not go past the
-        # local network segment.
-        ttl = struct.pack('b', 32)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
         servers = {}
+
         try:
             # Send data to the multicast group
             # self.console.print('sending "%s"' % "DISCOVER")
             start_time = time.time()
-            sent = sock.sendto("DISCOVER_GAME_SERVERS".encode(), multicast_group)
+            sent = sock.sendto("DISCOVER_GAME_SERVERS".encode(), ('<broadcast>', 5007))
 
             # Look for responses from all recipients
             while True:
