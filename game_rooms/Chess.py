@@ -20,6 +20,8 @@ from rich.live import Live
 from aiohttp import web
 from rich.text import Text
 
+from game_rooms.BaseRoom import BaseRoom
+
 
 def bool_to_color(value):
     if value is True:
@@ -30,7 +32,10 @@ def bool_to_color(value):
         return None
 
 
-class ChessViewer:
+class Chess(BaseRoom):
+
+    playable = True
+
     fully_qualified_piece_names = {
         "P": "White Pawn",
         "N": "White Knight",
@@ -60,9 +65,7 @@ class ChessViewer:
     }
 
     def __init__(self, user_hash, server_url, server_port, console: Console, room_name="Unknown"):
-        self.console = console
-        self.room_name = room_name
-        self.user_hash = user_hash
+        super().__init__(user_hash, server_url, server_port, console, room_name)
         self.player_color = None
         self.board = chess.Board()
         self.move_queued = False
@@ -74,8 +77,6 @@ class ChessViewer:
         self.selected_piece = None  # type: chess.Piece or None
         self.player = 1
         self.board_state = "Waiting for server..."
-        self.server_url = server_url
-        self.server_port = server_port
         self.last_move = None
         self.taken_pieces = {"white": [], "black": []}
         self.players = {}
@@ -245,10 +246,12 @@ class ChessViewer:
         if piece is not None:
             if piece.piece_type == chess.PAWN:
                 if self.board.turn == chess.WHITE:
-                    if move.to_square in chess.SquareSet(chess.BB_RANK_8) and move.from_square in chess.SquareSet(chess.BB_RANK_7):
+                    if move.to_square in chess.SquareSet(chess.BB_RANK_8) and move.from_square in chess.SquareSet(
+                            chess.BB_RANK_7):
                         return True
                 else:
-                    if move.to_square in chess.SquareSet(chess.BB_RANK_1) and move.from_square in chess.SquareSet(chess.BB_RANK_2):
+                    if move.to_square in chess.SquareSet(chess.BB_RANK_1) and move.from_square in chess.SquareSet(
+                            chess.BB_RANK_2):
                         return True
 
     def piece_has_valid_moves(self, piece, square):
@@ -374,11 +377,13 @@ class ChessViewer:
         player_table.add_column("Username", justify="left")
         player_table.add_column("Status", justify="left")
         for player in self.players:
-            player_table.add_row(f"{player['username']}", f"{'[green]Online[/green]' if player['online'] else '[red]Offline[/red]'}")
+            player_table.add_row(f"{player['username']}",
+                                 f"{'[green]Online[/green]' if player['online'] else '[red]Offline[/red]'}")
         spectator_table.add_column("Username", justify="left")
         spectator_table.add_column("Status", justify="left")
         for spectator in self.spectators:
-            spectator_table.add_row(f"{spectator['username']}", f"{'[green]Online[/green]' if spectator['online'] else '[red]Offline[/red]'}")
+            spectator_table.add_row(f"{spectator['username']}",
+                                    f"{'[green]Online[/green]' if spectator['online'] else '[red]Offline[/red]'}")
         return player_table, spectator_table
 
     def draw_board(self):

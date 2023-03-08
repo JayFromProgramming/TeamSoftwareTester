@@ -207,15 +207,15 @@ class Main:
             self.console.print(f"Joining room {room_name}...")
             asyncio.run(self.server_interface.join_room(room_name))
 
-    def multicast_discovery(self):
+    def multicast_discovery(self, timeout=1, port=5007):
         """
         Send a multicast message to find servers on the network
         """
-        self.console.print("Preforming multicast discovery...")
+        self.console.print(f"Preforming multicast discovery on port {port} timeout {timeout}s...")
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # create UDP socket
         sock.bind(('', 0))
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        sock.settimeout(5)
+        sock.settimeout(timeout)
         # Set the time-to-live for messages to 1 so they do not go past the local network
         ttl = struct.pack('b', 1)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
@@ -226,7 +226,7 @@ class Main:
         for interface in netifaces.interfaces():
             try:
                 broadcast = netifaces.ifaddresses(interface)[netifaces.AF_INET][0]['broadcast']
-                sock.sendto(b"DISCOVER_GAME_SERVER", (broadcast, 5007))
+                sock.sendto(b"DISCOVER_GAME_SERVER", (broadcast, port))
             except Exception as e:
                 pass
         try:

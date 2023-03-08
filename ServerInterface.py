@@ -7,14 +7,23 @@ import os
 import json
 import asyncio
 
-
 from rich.console import Console
 from rich.layout import Layout
 from rich.panel import Panel
 from rich.table import Column
 
 from RoomOptionHandler import RoomOptionHandler
-from game_rooms.Chess import ChessViewer
+from game_rooms.BaseRoom import BaseRoom
+
+import os
+
+# Import all files in the gamemanagers folder
+for file in os.listdir("game_rooms"):
+    if file.endswith(".py"):
+        try:
+            exec(f"from game_rooms.{file[:-3]} import *")
+        except Exception as e:
+            print(f"Error importing {file}: {e}")
 
 
 class ServerInterface:
@@ -29,12 +38,16 @@ class ServerInterface:
         self.user_name = None
         self.rooms = {}
 
-        self.room_handlers = {
-            "Chess": ChessViewer
-        }
-
         if not console:
             self.console = Console()
+
+        self.room_handlers = {}
+        for room in BaseRoom.__subclasses__():
+            if room.playable:
+                self.console.print(f"Adding room handler for {room.__name__}")
+                self.room_handlers[room.__name__] = room
+            else:
+                self.console.print(f"Skipping room handler for {room.__name__}")
 
         self.servers = json.load(open("servers.json", "r"))
         asyncio.run(self.get_server_id())
@@ -53,7 +66,6 @@ class ServerInterface:
         json.dump(self.servers, open("servers.json", "w"), indent=4)
 
         asyncio.run(self.get_rooms())
-
 
     async def get_server_id(self):
         async with aiohttp.ClientSession() as session:
@@ -132,7 +144,16 @@ class ServerInterface:
             async with session.get(f"http://{self.host}:{self.port}/get_games",
                                    cookies={"hash_id": self.user_hash}) as response:
                 if response.status == 200:
-                    return await response.json()
+                    valid_rooms = []
+                    server_rooms = await response.json()
+                    for room in server_rooms:
+                        if room not in self.room_handlers:
+                            valid_rooms.append((room, False))
+                        else:
+                            valid_rooms.append((room, True))
+                    # Sort the incompatible rooms to the bottom
+                    valid_rooms.sort(key=lambda x: x[1], reverse=True)
+                    return valid_rooms
                 else:
                     self.console.print(f"Failed to get valid rooms, status code: {response.status}")
 
@@ -163,7 +184,8 @@ class ServerInterface:
         room_name = self.console.input("Please enter a room name: ")
         # Ask if the room should be password protected
         # Ask what type of room it is
-        room_type = pick(valid_rooms, "Please choose a room type:", indicator="=>")[0]
+        room_options = [f"{room}, Incompatible" if not compatible else room for room, compatible in valid_rooms]
+        room_type = pick(room_options, "Please choose a room type:", indicator="=>")[0]
 
         settings = RoomOptionHandler(self.console, self.room_handlers[room_type].creation_args)
         settings.query()
