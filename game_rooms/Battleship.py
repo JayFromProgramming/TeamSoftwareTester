@@ -193,7 +193,7 @@ class BattleShip(BaseRoom):
         except Exception as e:
             self.console.print(f"Move Error: {e}\n{traceback.format_exc()}")
 
-    def make_board_table(self, board, ships):
+    def make_board_table(self, board, ships, show_cursor=False):
         table = Table(show_header=False, show_lines=True)
         # Make an empty table with the right size
         for _ in range(len(board)):
@@ -210,10 +210,20 @@ class BattleShip(BaseRoom):
                     else:
                         row.append("[white bold]■[/white bold]")
                 else:
-                    if tile == 1:
-                        row.append("[red]X[/red]")
+                    if show_cursor and column_num == self.cursor[0] and row_num == self.cursor[1]:
+                        if tile == 1:
+                            row.append("[red]*[/red]")
+                        elif tile == 2:
+                            row.append("[blue]*[/blue]")
+                        else:
+                            row.append("[white]*[/white]")
                     else:
-                        row.append(" ")
+                        if tile == 1:
+                            row.append("[red]X[/red]")
+                        elif tile == 2:
+                            row.append("[white]O[/white]")
+                        else:
+                            row.append(" ")
                 row_num += 1
             column_num += 1
             table.add_row(*row)
@@ -233,7 +243,8 @@ class BattleShip(BaseRoom):
         self.layout["player_board"]["board"].update(
             Panel(self.make_board_table(self.player_board, self.player_ships), title="Your Board"))
         self.layout["opponent_board"]["board"].update(
-            Panel(self.make_board_table(self.opponent_board, self.opponent_ships), title="Opponent Board"))
+            Panel(self.make_board_table(self.opponent_board, self.opponent_ships, not self.place_ships),
+                  title="Opponent Board"))
         self.layout["center_info"]["top_info"].update(
             Panel(f"State: {self.state}\nCurrent Player: {self.current_player}", title="Info"))
         self.layout["opponent_board"]["opponent_info"].update(self.ship_info_panel(self.opponent_board, "Opponent"))
@@ -277,7 +288,12 @@ class BattleShip(BaseRoom):
                         if not self.attack_queued:
                             self.queued_attack = self.cursor
                             self.attack_queued = True
-                            await self.send_move()
+                        else:
+                            self.queued_attack = None
+                            self.attack_queued = False
+                case b'\r':
+                    if self.attack_queued:
+                        await self.send_move()
                 case b'q':
                     self.running = False
                     self.console.print("Quitting...")
