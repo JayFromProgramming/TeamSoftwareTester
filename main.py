@@ -48,6 +48,8 @@ class Main:
         self.servers = discovered_servers
         self.console.print("Checking server status...")
 
+        longest_name = max([len(server['name']) for _, server in discovered_servers.items()])
+
         for server, info in self.servers.copy().items():
             if not info["online"]:
                 status = asyncio.run(self.check_server_status(info['host'], info["port"]))
@@ -60,12 +62,13 @@ class Main:
 
         for server, info in self.servers.copy().items():
             if not info["online"]:
-                self.console.print(f"{info['name']}@{info['host']}:{info['port']}".ljust(45) + " - [red]OFFLINE[/red]")
+                self.console.print(f"{info['name'].ljust(longest_name)}@{info['host']}:{info['port']}".ljust(45)
+                                   + " - [red]OFFLINE[/red]")
             elif "known" not in info:
-                self.console.print(f"{info['name']}@{info['host']}:{info['port']}".ljust(
+                self.console.print(f"{info['name'].ljust(longest_name)}@{info['host']}:{info['port']}".ljust(
                     45) + f" - [blue]DISCOVERED {info['response_time']:.2f}ms[/blue]")
             else:
-                self.console.print(f"{info['name']}@{info['host']}:{info['port']}".ljust(
+                self.console.print(f"{info['name'].ljust(longest_name)}@{info['host']}:{info['port']}".ljust(
                     45) + f" - [green]ONLINE {info['response_time']:.2f}ms[/green]")
 
         time.sleep(1)
@@ -74,12 +77,13 @@ class Main:
         options = []
         for server, info in self.servers.items():
             if not info["online"]:
-                options.append(f"{info['name']}@{info['host']}:{info['port']}".ljust(45) + " - OFFLINE")
+                options.append(f"{info['name'].ljust(longest_name)}@{info['host']}:{info['port']}".
+                               ljust(45) + " - OFFLINE")
             elif "known" not in info:
-                options.append(f"{info['name']}@{info['host']}:{info['port']}".ljust(
+                options.append(f"{info['name'].ljust(longest_name)}@{info['host']}:{info['port']}".ljust(
                     45) + f" - DISCOVERED {info['response_time']:.2f}ms")
             else:
-                options.append(f"{info['name']}@{info['host']}:{info['port']}".ljust(
+                options.append(f"{info['name'].ljust(longest_name)}@{info['host']}:{info['port']}".ljust(
                     45) + f" - ONLINE {info['response_time']:.2f}ms")
 
         options.append("Manually add a server")
@@ -208,33 +212,38 @@ class Main:
         Send a multicast message to find servers on the network
         """
         self.console.print("Preforming multicast discovery...")
-        multicast_group = ('224.1.1.1', 5007)
-
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # create UDP socket
         sock.bind(('', 0))
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        sock.settimeout(1)
+        sock.settimeout(5)
+        # Set the time-to-live for messages to 1 so they do not go past the local network
+        ttl = struct.pack('b', 1)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
 
         servers = {}
-
+        start_time = time.time()
+        # Calculate the broadcast address for each interface
+        for interface in netifaces.interfaces():
+            try:
+                broadcast = netifaces.ifaddresses(interface)[netifaces.AF_INET][0]['broadcast']
+                sock.sendto(b"DISCOVER_GAME_SERVER", (broadcast, 5007))
+            except Exception as e:
+                pass
         try:
-            # Send data to the multicast group
-            # self.console.print('sending "%s"' % "DISCOVER")
-            start_time = time.time()
-            sent = sock.sendto("DISCOVER_GAME_SERVERS".encode(), ('<broadcast>', 5007))
-
-            # Look for responses from all recipients
             while True:
                 try:
                     data, server = sock.recvfrom(1024)
                     end_time = time.time()
                     json_data = json.loads(data.decode())
-                    for host in json_data["host"]:
-                        if server[0] == host:
-                            json_data["host"] = host
-                    json_data["response_time"] = (end_time - start_time) * 1000
-                    json_data["online"] = True
-                    servers.update({json_data["server_id"]: json_data})
+                    if json_data["server_id"] not in servers:
+                        for host in json_data["host"]:
+                            if server[0] == host:
+                                json_data["host"] = host
+                        if isinstance(json_data["host"], list):
+                            continue
+                        json_data["response_time"] = (end_time - start_time) * 1000
+                        json_data["online"] = True
+                        servers.update({json_data["server_id"]: json_data})
                 except socket.timeout:
                     break
         except Exception as e:
