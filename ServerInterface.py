@@ -27,21 +27,25 @@ for file in os.listdir("game_rooms"):
 
 
 class ServerInterface:
+    """
+    The server interface handles all the communication with the server up to the point of joining a room.
+    At which point it hands off to the room handler.
+    """
 
     def __init__(self, host, port, console):
         self.console = console
-        self.host = host
-        self.port = port
-        self.server_id = None
-        self.server_name = None
-        self.user_hash = None
-        self.user_name = None
-        self.rooms = {}
+        self.host = host  # The host of the server
+        self.port = port  # The port of the server
+        self.server_id = None  # The server id
+        self.server_name = None  # The name of the server
+        self.user_hash = None  # The user hash is used to identify the user
+        self.user_name = None  # The user name is used to display the user name
+        self.rooms = {}  # A dictionary of all the rooms on the server
 
         if not console:
             self.console = Console()
 
-        self.room_handlers = {}
+        self.room_handlers = {}  # A dictionary of all the room handlers
         for room in BaseRoom.__subclasses__():
             if room.playable:
                 self.console.print(f"Adding room handler for {room.__name__}")
@@ -49,15 +53,15 @@ class ServerInterface:
             else:
                 self.console.print(f"Skipping room handler for {room.__name__}")
 
-        self.servers = json.load(open("servers.json", "r"))
-        asyncio.run(self.get_server_id())
+        self.servers = json.load(open("servers.json", "r"))  # Load the servers from the servers.json file
+        asyncio.run(self.get_server_id())  # Get the server id from the server
 
-        if self.server_id in self.servers:
-            asyncio.run(self.get_user(self.servers[self.server_id]["user_hash"]))
+        if self.server_id in self.servers:  # If we've already logged in to this server
+            asyncio.run(self.get_user(self.servers[self.server_id]["user_hash"]))  # Just log in with the user hash
         else:
-            username = self.console.input("Please enter a username: ")
-            asyncio.run(self.create_user(username))
-            asyncio.run(self.get_user(self.user_hash))
+            username = self.console.input("Please enter a username: ")  # Ask the user for a username
+            asyncio.run(self.create_user(username))     # Create a new user
+            asyncio.run(self.get_user(self.user_hash))  # Log in with the new user hash
 
         self.console.print(f"Logged in as {self.user_name}")
         # Save the login
@@ -65,30 +69,42 @@ class ServerInterface:
                                               'name': self.server_name, "online": None, "known": True}})
         json.dump(self.servers, open("servers.json", "w"), indent=4)
 
-        asyncio.run(self.get_rooms())
+        asyncio.run(self.get_rooms())  # Get the rooms from the server
 
     async def get_server_id(self):
+        """
+        Gets the server id from the server
+        """
         async with aiohttp.ClientSession() as session:
             async with session.get(f"http://{self.host}:{self.port}/get_server_id") as response:
-                if response.status == 200:
+                if response.status == 200:  # If the server responded with a 200 OK
                     json = await response.json()
-                    self.server_id = json["server_id"]
-                    self.server_name = json["server_name"]
+                    self.server_id = json["server_id"]  # Get the server id from the response
+                    self.server_name = json["server_name"]  # Get the server name from the response
                     self.console.print(f"Server ID: {self.server_id}\nServer Name: {self.server_name}")
                 else:
                     self.console.print(f"Failed to get server id: {response.status}")
 
-    async def create_user(self, username="testUser", anonymous=False):
-        async with aiohttp.ClientSession() as session:
+    async def create_user(self, username="testUser"):
+        """
+        Creates a new user on the server
+        :param username: The username of the new user
+        :return: The user hash of the new user
+        """
+        async with aiohttp.ClientSession() as session:  # Send a get request to the server for a new user hash
             async with session.get(f"http://{self.host}:{self.port}/create_user/{username}") as response:
                 reply = await response.json()
                 print(reply)
-                cookie = reply["user_id"]
+                cookie = reply["user_id"]  # Get the user id from the response
                 print(cookie)
                 self.user_hash = cookie
                 return cookie
 
     async def get_user(self, user_hash):
+        """
+        Gets the username from the server
+        :param user_hash: The user hash to get the username for
+        """
         async with aiohttp.ClientSession() as session:
             async with session.get(f"http://{self.host}:{self.port}/login/{user_hash}") as response:
                 if response.status == 200:
@@ -104,6 +120,9 @@ class ServerInterface:
                     self.user_name = username
 
     async def logout(self):
+        """
+        Sends a logout request to the server to let it know that the user is no longer connected
+        """
         async with aiohttp.ClientSession() as session:
             async with session.post(f"http://{self.host}:{self.port}/logout",
                                     cookies={"user_hash": self.user_hash}) as response:
@@ -113,6 +132,9 @@ class ServerInterface:
                     print(f"Failed to logout: {response.status}")
 
     async def get_rooms(self):
+        """
+        Gets all the active rooms from the server
+        """
         async with aiohttp.ClientSession() as session:
             async with session.get(f"http://{self.host}:{self.port}/get_rooms",
                                    cookies={"user_hash": self.user_hash}) as response:
@@ -125,6 +147,9 @@ class ServerInterface:
                     print(f"Failed to get rooms: {response.status}")
 
     async def get_save_info(self, room_id):
+        """
+        Gets the save info for a room
+        """
         async with aiohttp.ClientSession() as session:
             async with session.get(f"http://{self.host}:{self.port}/room/get_saved_info/{room_id}",
                                    cookies={"user_hash": self.user_hash}) as response:
@@ -134,7 +159,9 @@ class ServerInterface:
                     print(f"Failed to get save info: {response.status}")
 
     async def load_room(self, room_id):
-        # Get the room type
+        """
+        Loads information about a room from the server
+        """
         async with aiohttp.ClientSession() as session:
             async with session.post(f"http://{self.host}:{self.port}/room/load_game",
                                     json={"room_id": room_id},
@@ -149,6 +176,9 @@ class ServerInterface:
                     self.console.print(f"Failed to load room {room_id}, status code: {response.status}")
 
     async def get_valid_rooms(self):
+        """
+        Gets all the rooms that the user can join
+        """
         async with aiohttp.ClientSession() as session:
             async with session.get(f"http://{self.host}:{self.port}/get_games",
                                    cookies={"hash_id": self.user_hash}) as response:
@@ -167,7 +197,10 @@ class ServerInterface:
                     self.console.print(f"Failed to get valid rooms, status code: {response.status}")
 
     async def join_room(self, room_name):
-        # print(self.rooms[room_name])
+        """
+        Attempts to join a room on the server
+        :param room_name: The name of the room to join
+        """
         if self.rooms[room_name]["password_protected"]:
             password = self.console.input("Please enter the password: ")
         else:
@@ -187,7 +220,9 @@ class ServerInterface:
         await room.main()
 
     async def create_room(self):
-
+        """
+        Creates a new room on the server
+        """
         valid_rooms = await self.get_valid_rooms()
 
         room_name = self.console.input("Please enter a room name: ")
