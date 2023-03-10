@@ -38,41 +38,53 @@ class Main:
 
     def __init__(self):
         self.console = Console()
-        discovered_servers = self.multicast_discovery()
 
         if not os.path.exists("servers.json"):
             json.dump({}, open("servers.json", "w"))
 
-        loaded_servers = json.load(open("servers.json", "r"))
-        discovered_servers.update(loaded_servers)
-        self.servers = discovered_servers
-        self.console.print("Checking server status...")
+        with self.console.status("[bold green]Preforming multicast discovery...[/bold green]") as status:
+            discovered_servers = self.multicast_discovery(console_status=status)
+            loaded_servers = json.load(open("servers.json", "r"))
 
-        if len(self.servers) != 0:
-            longest_name = max([len(server['name']) for _, server in discovered_servers.items()])
-        else:
-            longest_name = 0
-
-        for server, info in self.servers.copy().items():
-            if not info["online"]:
-                status = asyncio.run(self.check_server_status(info['host'], info["port"]))
-                if status:
-                    self.servers[server]["online"] = True
-                    self.servers[server]["response_time"] = status
+            # Merge the two dictionaries, if there are any duplicates, the loaded servers will be used unless
+            # the host value is different from the discovered server
+            for server in discovered_servers:
+                if server in loaded_servers:
+                    if loaded_servers[server]["host"] != discovered_servers[server]["host"]:
+                        loaded_servers[server] = discovered_servers[server]
+                        loaded_servers[server]["known"] = True
                 else:
-                    self.servers[server]["online"] = False
-                    self.servers[server]["response_time"] = None
+                    loaded_servers[server] = discovered_servers[server]
 
-        for server, info in self.servers.copy().items():
-            if not info["online"]:
-                self.console.print(f"{info['name'].ljust(longest_name)}@{info['host']}:{info['port']}".ljust(45)
-                                   + " - [red]OFFLINE[/red]")
-            elif "known" not in info:
-                self.console.print(f"{info['name'].ljust(longest_name)}@{info['host']}:{info['port']}".ljust(
-                    45) + f" - [blue]DISCOVERED {info['response_time']:.2f}ms[/blue]")
+            self.servers = loaded_servers
+
+            if len(self.servers) != 0:
+                longest_name = max([len(info['name']) for info in self.servers.values()])
             else:
-                self.console.print(f"{info['name'].ljust(longest_name)}@{info['host']}:{info['port']}".ljust(
-                    45) + f" - [green]ONLINE {info['response_time']:.2f}ms[/green]")
+                longest_name = 0
+
+            # Check the status of each server
+            for server, info in self.servers.copy().items():
+                status.update(f"[bold green]Checking server status... "
+                              f"{info['name']}@{info['host']}:{info['port']}[/bold green]")
+                server_status = asyncio.run(self.check_server_status(info['host'], info["port"]))
+                if server_status:
+                    self.servers[server]["online"] = True
+                    self.servers[server]["response_time"] = server_status
+
+                if not info["online"]:
+                    self.console.print(
+                        "[red  ][OFFLINE][/red  ]".ljust(45) +
+                        f"- {info['name'].ljust(longest_name)}@{info['host']}:{info['port']}")
+                elif "known" not in info:
+                    self.console.print(
+                        f"[blue ][DISCOVERED] {info['response_time']:.2f}ms[/blue ]".ljust(45) +
+                        f"- {info['name'].ljust(longest_name)}@{info['host']}:{info['port']}")
+                else:
+                    self.console.print(
+                        f"[green][ONLINE] {info['response_time']:.2f}ms[/green]".ljust(45) +
+                        f"- {info['name'].ljust(longest_name)}@{info['host']}:{info['port']}")
+                time.sleep(0.5)
 
         time.sleep(1)
 
@@ -131,11 +143,14 @@ class Main:
             longest_name = max([len(room) for room in self.server_interface.rooms])
         else:
             longest_name = 0
+        option_num = 1
         for room in self.server_interface.rooms.values():
             # self.console.print(room)
             name = room["name"].ljust(longest_name)
-            names.append(f"{name}({room['type']}) - {len(room['users'])}/{room['max_users']} users | "
-                         f"Password: {'Yes' if room['password_protected'] else 'No'} | Joinable: {'Yes' if room['joinable'] else 'No'}")
+            names.append(f"{option_num}# '{name}'({room['type']}) - {len(room['users'])}/{room['max_users']} users | "
+                         f"Password: {'Yes' if room['password_protected'] else 'No'} |"
+                         f" Joinable: {'Yes' if room['joinable'] else 'No'}")
+            option_num += 1
         return names
 
     def load_save_files(self):
@@ -210,11 +225,11 @@ class Main:
             self.console.print(f"Joining room {room_name}...")
             asyncio.run(self.server_interface.join_room(room_name))
 
-    def multicast_discovery(self, timeout=1, port=5007):
+    def multicast_discovery(self, timeout=1, port=5007, console_status=None):
         """
         Send a multicast message to find servers on the network
         """
-        self.console.print(f"Preforming multicast discovery on port {port} timeout {timeout}s...")
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # create UDP socket
         sock.bind(('', 0))
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -226,28 +241,31 @@ class Main:
         servers = {}
         start_time = time.time()
         # Calculate the broadcast address for each interface
+        num_interfaces = len(netifaces.interfaces())
+        count = 0
         for interface in netifaces.interfaces():
             try:
                 broadcast = netifaces.ifaddresses(interface)[netifaces.AF_INET][0]['broadcast']
+                console_status.update(
+                    f"[bold green]Sending discovery message to {broadcast} {count}/{num_interfaces}[/bold green]")
                 sock.sendto(b"DISCOVER_GAME_SERVER", (broadcast, port))
-            except Exception as e:
-                pass
-
+            except Exception:
+                console_status.update(f"[bold red]Error sending discovery message to {interface}[/bold red]")
+            count += 1
         try:
             while True:
                 try:
                     data, server = sock.recvfrom(1024)
                     end_time = time.time()
                     json_data = json.loads(data.decode())
-                    if json_data["server_id"] not in servers:
-                        for host in json_data["host"]:
-                            if server[0] == host:
-                                json_data["host"] = host
-                        if isinstance(json_data["host"], list):
-                            continue
-                        json_data["response_time"] = (end_time - start_time) * 1000
-                        json_data["online"] = True
-                        servers.update({json_data["server_id"]: json_data})
+                    for host in json_data["host"]:
+                        if server[0] == host:
+                            json_data["host"] = host
+                    if isinstance(json_data["host"], list):
+                        continue
+                    json_data["response_time"] = (end_time - start_time) * 1000
+                    json_data["online"] = True
+                    servers.update({json_data["server_id"]: json_data})
                 except socket.timeout:
                     break
                 except Exception as e:
@@ -257,7 +275,16 @@ class Main:
 
         return servers
 
+    def logout(self):
+        self.console.print("Logging out...")
+        asyncio.run(self.server_interface.logout())
+
 
 if __name__ == "__main__":
     # Check if this client should be ananonymous via a command line argument
-    Main().main()
+    main = Main()
+    try:
+        main.main()
+    except KeyboardInterrupt:
+        main.logout()
+        sys.exit()

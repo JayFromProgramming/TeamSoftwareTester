@@ -88,6 +88,7 @@ class BattleShip(BaseRoom):
 
     def __init__(self, user_hash, server_url, server_port, console: Console, room_name="Unknown"):
         super().__init__(user_hash, server_url, server_port, console, room_name)
+
         self.player_board = []
         self.player_ships = []
         self.opponent_board = []
@@ -115,6 +116,8 @@ class BattleShip(BaseRoom):
         )
         self.layout["center_info"].split_column(
             Layout(name="top_info"),
+            Layout(name="players_info"),
+            Layout(name="spectators_info"),
         )
         self.layout["opponent_board"].split_column(
             Layout(name="board", ratio=2),
@@ -152,7 +155,8 @@ class BattleShip(BaseRoom):
                                         self.opponent_board = json["enemy_board"]
                                         self.state = json["state"]
                                         self.current_player = json["current_player"]
-                                        self.place_ships = json["allow_place_ships"] if "allow_place_ships" in json else False
+                                        self.place_ships = json[
+                                            "allow_place_ships"] if "allow_place_ships" in json else False
                                         if not self.player_ships:
                                             self.player_ships = \
                                                 [self.Ship(**ship) for ship in self.player_board["ships"]]
@@ -166,6 +170,7 @@ class BattleShip(BaseRoom):
                                             for i, ship in enumerate(self.opponent_ships):
                                                 ship.net_update(**self.opponent_board["ships"][i])
                                         self.board_size = json["board_size"]
+                                        self.console.bell()
         except Exception as e:
             self.console.print(f"Board Update Error: {e}\n{traceback.format_exc()}")
 
@@ -240,7 +245,28 @@ class BattleShip(BaseRoom):
         ships = [self.Ship(**ship) for ship in board["ships"]]
         for ship in ships:
             table.add_row(self.ship_types[ship.size], str(ship.size), ship.state_str())
-        return table
+        return Panel(table, title=f"{player} Ships")
+
+    def draw_player_table(self):
+        player_table = Table(show_header=True, show_lines=True, expand=True)
+        spectator_table = Table(show_header=True, show_lines=True, expand=True)
+        player_table.add_column("Username", justify="left")
+        player_table.add_column("Status", justify="left")
+        for player in self.players:
+            player_table.add_row(f"{player['username']}",
+                                 f"{'[green]Online[/green]' if player['online'] else '[red]Offline[/red]'}")
+        spectator_table.add_column("Username", justify="left")
+        spectator_table.add_column("Status", justify="left")
+        for spectator in self.spectators:
+            spectator_table.add_row(f"{spectator['username']}",
+                                    f"{'[green]Online[/green]' if spectator['online'] else '[red]Offline[/red]'}")
+        return player_table, spectator_table
+
+    def render_center_info(self):
+        text = [f"Room: {self.room_name}", f"State: {self.state}",
+                f"Current Player: {self.current_player['username'] if self.current_player else 'None'}",
+                f"Queued Attack: {self.queued_attack}"]
+        return "\n".join(text)
 
     def draw_ui(self):
         self.layout["player_board"]["board"].update(
@@ -248,8 +274,9 @@ class BattleShip(BaseRoom):
         self.layout["opponent_board"]["board"].update(
             Panel(self.make_board_table(self.opponent_board, self.opponent_ships, not self.place_ships),
                   title="Opponent Board"))
-        self.layout["center_info"]["top_info"].update(
-            Panel(f"State: {self.state}\nCurrent Player: {self.current_player}", title="Info"))
+        self.layout["center_info"]["top_info"].update(Panel(self.render_center_info(), title="Info"))
+        self.layout["center_info"]["players_info"].update(Panel(self.draw_player_table()[0], title="Players"))
+        self.layout["center_info"]["spectators_info"].update(Panel(self.draw_player_table()[1], title="Spectators"))
         self.layout["opponent_board"]["opponent_info"].update(self.ship_info_panel(self.opponent_board, "Opponent"))
         self.layout["player_board"]["player_info"].update(self.ship_info_panel(self.player_board, "Your"))
 
@@ -281,12 +308,6 @@ class BattleShip(BaseRoom):
                             self.placing_ship.placed = True
                             await self.send_move()
                             self.placing_ship = None
-
-                        for ship in self.player_ships:
-                            if not ship.placed:
-                                self.console.print(f"Placing ship {ship.size}")
-                                self.placing_ship = ship
-                                break
                     else:
                         if not self.attack_queued:
                             self.queued_attack = self.cursor
@@ -317,7 +338,13 @@ class BattleShip(BaseRoom):
                 live.update(self.draw_ui())
                 loops += 1
 
-                await asyncio.sleep(1/14)
+                if self.place_ships:
+                    for ship in self.player_ships:
+                        if not ship.placed:
+                            self.placing_ship = ship
+                            break
+
+                await asyncio.sleep(1 / 14)
 
     async def main(self):
         await self.get_board(True)

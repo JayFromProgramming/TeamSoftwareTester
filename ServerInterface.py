@@ -103,6 +103,15 @@ class ServerInterface:
                     self.user_hash = hash
                     self.user_name = username
 
+    async def logout(self):
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"http://{self.host}:{self.port}/logout",
+                                    cookies={"user_hash": self.user_hash}) as response:
+                if response.status == 200:
+                    print("Logged out")
+                else:
+                    print(f"Failed to logout: {response.status}")
+
     async def get_rooms(self):
         async with aiohttp.ClientSession() as session:
             async with session.get(f"http://{self.host}:{self.port}/get_rooms",
