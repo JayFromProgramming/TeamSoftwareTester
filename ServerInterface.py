@@ -8,12 +8,11 @@ import json
 import asyncio
 
 from rich.console import Console
-from rich.layout import Layout
-from rich.panel import Panel
-from rich.table import Column
-
-from RoomOptionHandler import RoomOptionHandler
-from game_rooms.BaseRoom import BaseRoom
+try:
+    from RoomOptionHandler import RoomOptionHandler
+    from game_rooms.BaseRoom import BaseRoom
+except ImportError:
+    print("Failed to import RoomOptionHandler or BaseRoom, still launching but usage will be limited")
 
 import os
 
