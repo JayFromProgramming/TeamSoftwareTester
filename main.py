@@ -274,6 +274,7 @@ class Main:
                 console_status.update(
                     f"[bold green]Sending discovery message to {broadcast} {count}/{num_interfaces}[/bold green]")
                 sock.sendto(b"DISCOVER_GAME_SERVER", (broadcast, port))
+                time.sleep(0.1)
             except Exception:
                 console_status.update(f"[bold red]Error sending discovery message to {interface}[/bold red]")
             count += 1
