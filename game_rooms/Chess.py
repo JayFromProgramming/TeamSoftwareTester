@@ -1,6 +1,7 @@
 import datetime
-import msvcrt
 import os
+# Import the correct terminal keypress module
+import keypress
 import threading
 import time
 import traceback
@@ -341,9 +342,9 @@ class Chess(BaseRoom):
                             f" you are [bold]{self.color_to_str(self.player_color)}[/bold]")
         board_table.add_row(board)
         if self.move_queued:
-            board_table.add_row(f"Move queued: {self.queued_move}")
+            board_table.add_row(f"[green]Move queued: {self.queued_move}[/green]")
         elif self.piece_selected:
-            board_table.add_row(f"Selected piece: {self.selected_piece}")
+            board_table.add_row(f"[yellow]Selected piece: {self.selected_piece}[/yellow]")
         else:
             over_piece = self.board.piece_at(chess.square(self.cursor[1], self.cursor[0]))
             if over_piece is not None:
@@ -420,8 +421,8 @@ class Chess(BaseRoom):
         return board_table
 
     async def keyboard_thread(self):
-        if msvcrt.kbhit():
-            key = msvcrt.getch()
+        if keypress.kbhit():
+            key = keypress.getch()
             # print(key)
             match key:
                 case b'H':

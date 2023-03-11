@@ -1,5 +1,5 @@
 import asyncio
-import msvcrt
+import keypress
 import traceback
 
 import aiohttp
@@ -283,8 +283,8 @@ class BattleShip(BaseRoom):
         return self.layout
 
     async def keyboard_thread(self):
-        if msvcrt.kbhit():
-            key = msvcrt.getch()
+        if keypress.kbhit():
+            key = keypress.getch()
             # print(key)
             match key:
                 case b'H':

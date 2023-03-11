@@ -1,7 +1,10 @@
+import concurrent
+from concurrent.futures import ThreadPoolExecutor
 import ipaddress
 import os
 import struct
 import sys
+import threading
 import time
 
 from rich.console import Console
@@ -38,6 +41,7 @@ class Main:
 
     def __init__(self):
         self.console = Console()
+        self.ping_queue = asyncio.Queue()
 
         if not os.path.exists("servers.json"):
             json.dump({}, open("servers.json", "w"))
@@ -64,27 +68,36 @@ class Main:
                 longest_name = 0
 
             # Check the status of each server
-            for server, info in self.servers.copy().items():
-                status.update(f"[bold green]Checking server status... "
-                              f"{info['name']}@{info['host']}:{info['port']}[/bold green]")
-                server_status = asyncio.run(self.check_server_status(info['host'], info["port"]))
-                if server_status:
-                    self.servers[server]["online"] = True
-                    self.servers[server]["response_time"] = server_status
+            status.update("[bold green]Queueing server status checks...[/bold green]")
+            threading.Thread(target=self.check_server_status, args=(self.servers, self.ping_queue)).start()
+            finished = False
+            still_pinging = [server_id for server_id in self.servers]
+            while not finished:
+                # Have the status update display all the server names with pings still in progress
+                pinging_servers = [self.servers[server_id]["name"] for server_id in still_pinging]
+                status.update(f"[bold green]Checking server status... [{', '.join(pinging_servers)}][/bold green]")
+                if self.ping_queue.qsize() > 0:
+                    server_id, info = self.ping_queue.get_nowait()
+                    still_pinging.remove(server_id)
 
-                if not info["online"]:
-                    self.console.print(
-                        "[red  ][OFFLINE][/red  ]".ljust(45) +
-                        f"- {info['name'].ljust(longest_name)}@{info['host']}:{info['port']}")
-                elif "known" not in info:
-                    self.console.print(
-                        f"[blue ][DISCOVERED] {info['response_time']:.2f}ms[/blue ]".ljust(45) +
-                        f"- {info['name'].ljust(longest_name)}@{info['host']}:{info['port']}")
-                else:
-                    self.console.print(
-                        f"[green][ONLINE] {info['response_time']:.2f}ms[/green]".ljust(45) +
-                        f"- {info['name'].ljust(longest_name)}@{info['host']}:{info['port']}")
-                time.sleep(0.5)
+                    if not info["online"]:
+                        self.console.print(
+                            "[red  ][OFFLINE][/red  ]".ljust(45) +
+                            f"- {info['name'].ljust(longest_name)}@{info['host']}:{info['port']}")
+                    elif "error" in info:
+                        self.console.print(
+                            "[red  ][ERROR][/red  ]".ljust(45) +
+                            f"- {info['name'].ljust(longest_name)}@{info['host']}:{info['port']}")
+                    elif "known" not in info:
+                        self.console.print(
+                            f"[blue ][DISCOVERED] {info['response_time']:.2f}ms[/blue ]".ljust(45) +
+                            f"- {info['name'].ljust(longest_name)}@{info['host']}:{info['port']}")
+                    else:
+                        self.console.print(
+                            f"[green][ONLINE] {info['response_time']:.2f}ms[/green]".ljust(45) +
+                            f"- {info['name'].ljust(longest_name)}@{info['host']}:{info['port']}")
+                if len(still_pinging) == 0:
+                    finished = True
 
         time.sleep(1)
 
@@ -119,22 +132,34 @@ class Main:
         # If it doesn't exist, connect to the server and create a new user.
         self.server_interface = ServerInterface(host=host, port=port, console=self.console)
 
-    async def check_server_status(self, host, port):
+    def check_server_status(self, servers, queue):
         """
         Checks the status of the server.
         :return:
         """
+        # Start an asyncio executor to run the ping function
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            for server_id, info in servers.items():
+                executor.submit(asyncio.run, self.check_server_status_thread(server_id, info, queue))
+
+    @staticmethod
+    async def check_server_status_thread(server_id, info, queue):
         try:
-            start_time = time.time()
+            host, port = info["host"], info["port"]
             async with aiohttp.ClientSession() as session:
+                start_time = time.time()
                 async with session.get(f"http://{host}:{port}/get_server_id", timeout=5) as response:
+                    info["response_time"] = (time.time() - start_time) * 1000
                     if response.status == 200:
-                        # Get the response time
-                        return (time.time() - start_time) * 1000
+                        # Update the values of the server
+                        info["online"] = True
+                        queue.put_nowait((server_id, info))
                     else:
-                        return False
+                        info["online"] = False
+                        queue.put_nowait((server_id, info))
         except Exception as e:
-            return False
+            info["error"] = e
+            queue.put_nowait((server_id, info))
 
     def build_name_list(self):
         names = []
