@@ -260,7 +260,7 @@ class Main:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         sock.settimeout(timeout)
         # Set the time-to-live for messages to 1 so they do not go past the local network
-        ttl = struct.pack('b', 1)
+        ttl = struct.pack('b', 5)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
 
         servers = {}
@@ -274,7 +274,6 @@ class Main:
                 console_status.update(
                     f"[bold green]Sending discovery message to {broadcast} {count}/{num_interfaces}[/bold green]")
                 sock.sendto(b"DISCOVER_GAME_SERVER", (broadcast, port))
-                time.sleep(0.1)
             except Exception:
                 console_status.update(f"[bold red]Error sending discovery message to {interface}[/bold red]")
             count += 1
