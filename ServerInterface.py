@@ -13,6 +13,8 @@ try:
     from RoomOptionHandler import RoomOptionHandler
 except ImportError:
     print("Failed to import RoomOptionHandler or BaseRoom, still launching but usage will be limited")
+except SyntaxError:
+    print("Failed to import RoomOptionHandler or BaseRoom, still launching but usage will be limited")
 
 import os
 
