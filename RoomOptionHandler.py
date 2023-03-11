@@ -1,5 +1,5 @@
 import datetime
-import msvcrt
+import keypress
 import time
 
 from rich.layout import Layout
@@ -56,8 +56,8 @@ class Option:
                      expand=True)
 
     def _arrow_input(self, increment=1):
-        if msvcrt.kbhit():
-            key = msvcrt.getch()
+        if keypress.kbhit():
+            key = keypress.getch()
             if key == b"\xe0":
                 key = msvcrt.getch()
                 if key == b"H":
@@ -77,10 +77,10 @@ class Option:
             case "int":
                 self._arrow_input()
             case "bool":
-                if msvcrt.kbhit():
-                    key = msvcrt.getch()
+                if keypress.kbhit():
+                    key = keypress.getch()
                     if key == b"\xe0":
-                        key = msvcrt.getch()
+                        key = keypress.getch()
                         if key == b"H":
                             self.value = not self.value
                         elif key == b"P":
@@ -89,10 +89,10 @@ class Option:
                         if key == b"\r":
                             self.selected = False
             case "list":
-                if msvcrt.kbhit():
-                    key = msvcrt.getch()
+                if keypress.kbhit():
+                    key = keypress.getch()
                     if key == b"\xe0":
-                        key = msvcrt.getch()
+                        key = keypress.getch()
                         if key == b"H":
                             self.list_index += 1
                             if self.list_index >= len(self.options):
@@ -214,10 +214,10 @@ class RoomOptionHandler:
             self.selected = True
 
     def _get_user_input(self):
-        if msvcrt.kbhit():
-            key = msvcrt.getch()
+        if keypress.kbhit():
+            key = keypress.getch()
             if key == b"\xe0":  # Special key (arrows, f keys, ins, del, etc.)
-                key = msvcrt.getch()
+                key = keypress.getch()
                 match key:
                     case b"H":  # Up arrow
                         self._move_cursor("up")
