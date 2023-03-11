@@ -263,7 +263,7 @@ class Main:
         ttl = struct.pack('b', 5)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
 
-        multicast_group = ('224.0.1.255', port)
+        multicast_groups = ['224.0.0.255', '224.0.1.255', '224.0.255.255', '233.255.255.255']
 
         # create multicast message
 
@@ -282,7 +282,11 @@ class Main:
             except Exception:
                 console_status.update(f"[bold red]Error sending discovery message to {interface}[/bold red]")
             count += 1
-        sock.sendto(b"DISCOVER_GAME_SERVER", multicast_group)
+        for group in multicast_groups:
+            try:
+                sock.sendto(b"DISCOVER_GAME_SERVER", (group, port))
+            except Exception:
+                console_status.update(f"[bold red]Error sending discovery message to {group}[/bold red]")
         try:
             while True:
                 try:
