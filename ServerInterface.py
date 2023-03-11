@@ -9,8 +9,8 @@ import asyncio
 
 from rich.console import Console
 try:
-    from RoomOptionHandler import RoomOptionHandler
     from game_rooms.BaseRoom import BaseRoom
+    from RoomOptionHandler import RoomOptionHandler
 except ImportError:
     print("Failed to import RoomOptionHandler or BaseRoom, still launching but usage will be limited")
 
