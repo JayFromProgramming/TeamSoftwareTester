@@ -263,7 +263,7 @@ class Main:
         ttl = struct.pack('b', 5)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
 
-        multicast_groups = ['224.0.0.255', '224.0.1.255', '224.0.255.255', '233.255.255.255']
+        multicast_groups = ['224.0.0.255', '224.0.1.255', '224.0.255.255', '233.255.255.255', '234.255.255.255']
 
         # create multicast message
 
